@@ -1,3 +1,8 @@
+bottom-up_features/
+final_dataset/
+final_dataset*/
+saved_checkpoints/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

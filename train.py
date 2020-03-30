@@ -30,6 +30,7 @@ batch_size = 100
 workers = 1  # for data-loading; right now, only 1 works with h5py
 best_bleu4 = 0.  # BLEU-4 score right now
 print_freq = 100  # print training/validation stats every __ batches
+print_freq_val = 1000  # print training/validation stats every __ batches
 checkpoint = None  # path to checkpoint, None if none
 
 
@@ -76,7 +77,9 @@ def main():
         batch_size=batch_size, shuffle=True, num_workers=workers, pin_memory=True)
     val_loader = torch.utils.data.DataLoader(
         CaptionDataset(data_folder, data_name, 'VAL'),
-        batch_size=batch_size, shuffle=True, num_workers=workers, pin_memory=True)
+        collate_fn=collate_fn, # use our specially design collate function with valid/test only
+        batch_size=1, shuffle=False, num_workers=workers, pin_memory=True)
+    #    batch_size=batch_size, shuffle=True, num_workers=workers, pin_memory=True)
 
     # Epochs
     for epoch in range(start_epoch, epochs):
@@ -87,6 +90,12 @@ def main():
         if epochs_since_improvement > 0 and epochs_since_improvement % 8 == 0:
             adjust_learning_rate(decoder_optimizer, 0.8)
     
+        # One epoch's validation
+        recent_bleu4 = validate(val_loader=val_loader,
+                                decoder=decoder,
+                                criterion_ce=criterion_ce,
+                                criterion_dis=criterion_dis)
+
         # One epoch's training
         train(train_loader=train_loader,
               decoder=decoder,
@@ -219,7 +228,19 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis):
 
     # Batches
     with torch.no_grad(): 
-        for i, (imgs, caps, caplens,allcaps) in enumerate(val_loader):
+        #for i, (imgs, caps, caplens,allcaps) in enumerate(val_loader):
+        for i, (imgs, caps, caplens, orig_caps) in enumerate(val_loader):
+
+            if i>0 and (i+1) % 5 != 0:
+                # only decode every 5th caption, starting from idx 0.
+                # this is because the iterator iterates over all captions in the dataset, not all images.
+                if i % print_freq_val == 0:
+                    print('Validation: [{0}/{1}]\t'
+                          'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                          'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                          'Top-5 Accuracy {top5.val:.3f} ({top5.avg:.3f})\t'.format(i, len(val_loader), batch_time=batch_time,
+                                                                                    loss=losses, top5=top5accs))
+                continue
 
             # Move to device, if available
             imgs = imgs.to(device)
@@ -258,7 +279,7 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis):
 
             start = time.time()
 
-            if i % print_freq == 0:
+            if i % print_freq_val == 0:
                 print('Validation: [{0}/{1}]\t'
                       'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
@@ -270,13 +291,9 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis):
             # references = [[ref1a, ref1b, ref1c], [ref2a, ref2b], ...], hypotheses = [hyp1, hyp2, ...]
 
             # References
-            allcaps = allcaps[sort_ind]  # because images were sorted in the decoder
-            for j in range(allcaps.shape[0]):
-                img_caps = allcaps[j].tolist()
-                img_captions = list(
-                    map(lambda c: [w for w in c if w not in {word_map['<start>'], word_map['<pad>']}],
-                        img_caps))  # remove <start> and pads
-                references.append(img_captions)
+            assert(len(sort_ind)==1), "Cannot have batch_size>1 for validation."
+            img_caps = [" ".join(c) for c in orig_caps]
+            references.append( img_caps )
 
             # Hypotheses
             _, preds = torch.max(scores_copy, dim=2)

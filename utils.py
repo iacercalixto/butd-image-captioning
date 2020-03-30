@@ -8,6 +8,14 @@ from collections import Counter
 from random import seed, choice, sample
 import pickle
 
+def collate_fn(batch):
+    """ Collate function to be used when iterating captioning datasets.
+        Only use with batch size == 1.
+    """
+    image_features, caps, caplens, orig_caps = zip(*batch)
+    return torch.stack(image_features), torch.stack(caps), torch.stack(caplens), orig_caps[0]
+
+
 def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_freq,output_folder,max_len=100):
     """
     Creates input files for training, validation, and test data.
@@ -96,6 +104,7 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
     for impaths, imcaps, split in [(train_image_det, train_image_captions, 'TRAIN'),
                                    (val_image_det, val_image_captions, 'VAL'),
                                    (test_image_det, test_image_captions, 'TEST')]:
+        orig_captions = []
         enc_captions = []
         caplens = []
         
@@ -105,7 +114,7 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
                 captions = imcaps[i] + [choice(imcaps[i]) for _ in range(captions_per_image - len(imcaps[i]))]
             else:
                 captions = sample(imcaps[i], k=captions_per_image)
-                
+
             # Sanity check
             assert len(captions) == captions_per_image
             
@@ -118,9 +127,13 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
                 c_len = len(c) + 2
 
                 enc_captions.append(enc_c)
+                orig_captions.append(c)
                 caplens.append(c_len)
         
         # Save encoded captions and their lengths to JSON files
+        with open(os.path.join(output_folder, split + '_ORIG_CAPTIONS_' + base_filename + '.json'), 'w') as j:
+            json.dump(orig_captions, j)
+
         with open(os.path.join(output_folder, split + '_CAPTIONS_' + base_filename + '.json'), 'w') as j:
             json.dump(enc_captions, j)
 

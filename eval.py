@@ -1,3 +1,4 @@
+import os
 import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
@@ -8,43 +9,49 @@ from nltk.translate.bleu_score import corpus_bleu
 import torch.nn.functional as F
 from tqdm import tqdm
 from nlgeval import NLGEval
+import argparse
 
-# Parameters
+# Default parameters
 data_folder = 'final_dataset'  # folder with data files saved by create_input_files.py
 data_name = 'coco_5_cap_per_img_5_min_word_freq'  # base name shared by data files
-checkpoint_file = 'BEST_34checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar'  # model checkpoint
-
+checkpoint_file = os.path.join("saved_checkpoints", "BEST_48checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar")
 word_map_file = 'WORDMAP_coco_5_cap_per_img_5_min_word_freq.json'  # word map, ensure it's the same the data was encoded with and the model was trained with
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # sets device for model and PyTorch tensors
 cudnn.benchmark = True  # set to true only if inputs to model are fixed size; otherwise lot of computational overhead
-
-# Load model
-torch.nn.Module.dump_patches = True
-checkpoint = torch.load(checkpoint_file,map_location = device)
-decoder = checkpoint['decoder']
-decoder = decoder.to(device)
-decoder.eval()
-
 nlgeval = NLGEval()  # loads the evaluator
 
-# Load word map (word2ix)
-word_map_file = os.path.join(data_folder, 'WORDMAP_' + data_name + '.json')
-with open(word_map_file, 'r') as j:
-    word_map = json.load(j)
-rev_word_map = {v: k for k, v in word_map.items()}
-vocab_size = len(word_map)
-
-def evaluate(beam_size):
+def evaluate(checkpoint_file, data_folder, beam_size):
     """
     Evaluation
 
     :param beam_size: beam size at which to generate captions for evaluation
     :return: Official MSCOCO evaluator scores - bleu4, cider, rouge, meteor
     """
+
+    def load_model():
+        # Load model using checkpoint file provided
+        torch.nn.Module.dump_patches = True
+        checkpoint = torch.load(checkpoint_file, map_location = device)
+        decoder = checkpoint['decoder']
+        decoder = decoder.to(device)
+        decoder.eval()
+    
+    def load_dictionary():
+        # Load word map (word2ix) using data folder provided
+        word_map_file = os.path.join(data_folder, 'WORDMAP_' + data_name + '.json')
+        with open(word_map_file, 'r') as j:
+            word_map = json.load(j)
+        rev_word_map = {v: k for k, v in word_map.items()}
+        vocab_size = len(word_map)
+
+    load_model()
+    load_dictionary()
+
     # DataLoader
     loader = torch.utils.data.DataLoader(
         CaptionDataset(data_folder, data_name, 'TEST'),
-        batch_size=1, shuffle=True, num_workers=1, pin_memory=torch.cuda.is_available())
+        batch_size=1, shuffle=False, num_workers=1, collate_fn=collate_fn,
+        pin_memory=torch.cuda.is_available())
 
     # Lists to store references (true captions), and hypothesis (prediction) for each image
     # If for n images, we have n hypotheses, and references a, b, c... for each image, we need -
@@ -53,8 +60,11 @@ def evaluate(beam_size):
     hypotheses = list()
 
     # For each image
-    for i, (image_features, caps, caplens, allcaps) in enumerate(
+    for caption_idx, (image_features, caps, caplens, orig_caps) in enumerate(
             tqdm(loader, desc="EVALUATING AT BEAM SIZE " + str(beam_size))):
+
+        if caption_idx>0 and (caption_idx+1)%5 != 0:
+            continue
 
         k = beam_size
 
@@ -144,11 +154,7 @@ def evaluate(beam_size):
         seq = complete_seqs[i]
 
         # References
-        img_caps = allcaps[0].tolist()
-        img_captions = list(
-            map(lambda c: [rev_word_map[w] for w in c if w not in {word_map['<start>'], word_map['<end>'], word_map['<pad>']}],
-                img_caps))  # remove <start> and pads
-        img_caps = [' '.join(c) for c in img_captions]
+        img_caps = [' '.join(c) for c in orig_caps]
         #print(img_caps)
         references.append(img_caps)
 
@@ -166,5 +172,12 @@ def evaluate(beam_size):
 
 if __name__ == '__main__':
     beam_size = 5
-    metrics_dict = evaluate(beam_size)
+    p = argparse.ArgumentParser()
+    p.add_argument('--checkpoint_file', type=str, required=True, help="Checkpoint to use for beam search.")
+    p.add_argument('--beam_size', type=int, default=beam_size, 
+            help="Beam size to use with beam search. If set to one we run greedy search.")
+    p.add_argument('--data_folder', type=str, default='final_dataset',
+            help="Folder where one will find the preprocessed data and original captions.")
+
+    metrics_dict = evaluate(args.checkpoint_file, args.data_folder, args.beam_size)
     print(metrics_dict)
