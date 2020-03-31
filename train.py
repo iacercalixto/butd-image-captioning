@@ -32,6 +32,7 @@ best_bleu4 = 0.  # BLEU-4 score right now
 print_freq = 100  # print training/validation stats every __ batches
 print_freq_val = 1000  # print training/validation stats every __ batches
 checkpoint = None  # path to checkpoint, None if none
+#checkpoint = "checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar"
 
 
 def main():
@@ -39,12 +40,14 @@ def main():
     Training and validation.
     """
 
-    global best_bleu4, epochs_since_improvement, checkpoint, start_epoch,data_name, word_map
+    global best_bleu4, epochs_since_improvement, checkpoint, start_epoch,data_name, word_map, word_map_inv
 
     # Read word map
     word_map_file = os.path.join(data_folder, 'WORDMAP_' + data_name + '.json')
     with open(word_map_file, 'r') as j:
         word_map = json.load(j)
+        # create inverse word map
+    word_map_inv = {v:k for k,v in word_map.items()}
 
     # Initialize / load checkpoint
     if checkpoint is None:
@@ -292,18 +295,28 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis):
 
             # References
             assert(len(sort_ind)==1), "Cannot have batch_size>1 for validation."
-            img_caps = [" ".join(c) for c in orig_caps]
-            references.append( img_caps )
+            # a reference is a list of lists:
+            # [['the', 'cat', 'sat', 'on', 'the', 'mat'], ['a', 'cat', 'on', 'the', 'mat']]
+            references.append( orig_caps )
 
             # Hypotheses
             _, preds = torch.max(scores_copy, dim=2)
             preds = preds.tolist()
-            temp_preds = list()
+            preds_idxs_no_pads = list()
             for j, p in enumerate(preds):
-                temp_preds.append(preds[j][:decode_lengths[j]])  # remove pads
+                preds_idxs_no_pads.append(preds[j][:decode_lengths[j]])  # remove pads
+                preds_idxs_no_pads = list(map(lambda c: [w for w in c if w not in {word_map['<start>'], word_map['<pad>']}], preds_idxs_no_pads))
+            temp_preds = list()
+            # remove <start> and pads and convert idxs to string
+            for hyp in preds_idxs_no_pads:
+                temp_preds.append( [] )
+                for w in hyp:
+                    assert( not w == word_map['pad'] ), "Should have removed all pads."
+                    if not w == word_map['<start>']:
+                        temp_preds[-1].append( word_map_inv[w] )
+
             preds = temp_preds
             hypotheses.extend(preds)
-
             assert len(references) == len(hypotheses)
 
     # Calculate BLEU-4 scores
