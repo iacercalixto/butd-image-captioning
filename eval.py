@@ -15,6 +15,7 @@ import argparse
 data_folder = 'final_dataset'  # folder with data files saved by create_input_files.py
 data_name = 'coco_5_cap_per_img_5_min_word_freq'  # base name shared by data files
 checkpoint_file = os.path.join("saved_checkpoints", "BEST_48checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar")
+#checkpoint_file = os.path.join("saved_checkpoints", "BEST_0checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar")
 word_map_file = 'WORDMAP_coco_5_cap_per_img_5_min_word_freq.json'  # word map, ensure it's the same the data was encoded with and the model was trained with
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # sets device for model and PyTorch tensors
 cudnn.benchmark = True  # set to true only if inputs to model are fixed size; otherwise lot of computational overhead
@@ -27,6 +28,7 @@ def evaluate(checkpoint_file, data_folder, beam_size):
     :param beam_size: beam size at which to generate captions for evaluation
     :return: Official MSCOCO evaluator scores - bleu4, cider, rouge, meteor
     """
+    global word_map
 
     def load_model():
         # Load model using checkpoint file provided
@@ -35,6 +37,7 @@ def evaluate(checkpoint_file, data_folder, beam_size):
         decoder = checkpoint['decoder']
         decoder = decoder.to(device)
         decoder.eval()
+        return decoder
     
     def load_dictionary():
         # Load word map (word2ix) using data folder provided
@@ -43,9 +46,10 @@ def evaluate(checkpoint_file, data_folder, beam_size):
             word_map = json.load(j)
         rev_word_map = {v: k for k, v in word_map.items()}
         vocab_size = len(word_map)
+        return word_map, rev_word_map, vocab_size
 
-    load_model()
-    load_dictionary()
+    decoder = load_model()
+    word_map, rev_word_map, vocab_size = load_dictionary()
 
     # DataLoader
     loader = torch.utils.data.DataLoader(
@@ -178,6 +182,7 @@ if __name__ == '__main__':
             help="Beam size to use with beam search. If set to one we run greedy search.")
     p.add_argument('--data_folder', type=str, default='final_dataset',
             help="Folder where one will find the preprocessed data and original captions.")
+    args = p.parse_args()
 
     metrics_dict = evaluate(args.checkpoint_file, args.data_folder, args.beam_size)
     print(metrics_dict)
