@@ -92,12 +92,6 @@ def main():
             break
         if epochs_since_improvement > 0 and epochs_since_improvement % 8 == 0:
             adjust_learning_rate(decoder_optimizer, 0.8)
-    
-        # One epoch's validation
-        recent_bleu4 = validate(val_loader=val_loader,
-                                decoder=decoder,
-                                criterion_ce=criterion_ce,
-                                criterion_dis=criterion_dis)
 
         # One epoch's training
         train(train_loader=train_loader,
