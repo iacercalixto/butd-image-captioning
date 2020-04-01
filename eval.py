@@ -67,7 +67,7 @@ def evaluate(checkpoint_file, data_folder, beam_size):
     for caption_idx, (image_features, caps, caplens, orig_caps) in enumerate(
             tqdm(loader, desc="EVALUATING AT BEAM SIZE " + str(beam_size))):
 
-        if caption_idx>0 and (caption_idx+1)%5 != 0:
+        if caption_idx%5 != 0:
             continue
 
         k = beam_size

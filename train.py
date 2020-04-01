@@ -31,8 +31,8 @@ workers = 1  # for data-loading; right now, only 1 works with h5py
 best_bleu4 = 0.  # BLEU-4 score right now
 print_freq = 100  # print training/validation stats every __ batches
 print_freq_val = 1000  # print training/validation stats every __ batches
-checkpoint = None  # path to checkpoint, None if none
-#checkpoint = "checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar"
+#checkpoint = None  # path to checkpoint, None if none
+checkpoint = "checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar"
 
 
 def main():
@@ -92,6 +92,12 @@ def main():
             break
         if epochs_since_improvement > 0 and epochs_since_improvement % 8 == 0:
             adjust_learning_rate(decoder_optimizer, 0.8)
+
+        # One epoch's validation
+        recent_bleu4 = validate(val_loader=val_loader,
+                                decoder=decoder,
+                                criterion_ce=criterion_ce,
+                                criterion_dis=criterion_dis)
 
         # One epoch's training
         train(train_loader=train_loader,
@@ -228,7 +234,7 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis):
         #for i, (imgs, caps, caplens,allcaps) in enumerate(val_loader):
         for i, (imgs, caps, caplens, orig_caps) in enumerate(val_loader):
 
-            if i>0 and (i+1) % 5 != 0:
+            if i % 5 != 0:
                 # only decode every 5th caption, starting from idx 0.
                 # this is because the iterator iterates over all captions in the dataset, not all images.
                 if i % print_freq_val == 0:
