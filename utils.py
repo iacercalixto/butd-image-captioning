@@ -162,8 +162,8 @@ def init_embedding(embeddings):
     torch.nn.init.uniform_(embeddings, -bias, bias)
 
 
-def save_checkpoint(data_name, epoch, epochs_since_improvement,decoder,decoder_optimizer,
-                    bleu4, is_best):
+def save_checkpoint(data_name, epoch, epochs_since_improvement, decoder, decoder_optimizer,
+                    stopping_metric, metric_score, tracking, is_best, outdir):
     """
     Saves model checkpoint.
 
@@ -172,26 +172,30 @@ def save_checkpoint(data_name, epoch, epochs_since_improvement,decoder,decoder_o
     :param epochs_since_improvement: number of epochs since last improvement in BLEU-4 score
     :param decoder: decoder model
     :param decoder_optimizer: optimizer to update decoder's weights
-    :param bleu4: validation BLEU-4 score for this epoch
+    :param stopping_metric: metric to check stopping
+    :param metric_score: validation score for this epoch
+    :param tracking: list with past scores
     :param is_best: is this checkpoint the best so far?
+    :param outdir: where to store all the files
     """
     state = {'epoch': epoch,
              'epochs_since_improvement': epochs_since_improvement,
-             'bleu-4': bleu4,
+             'stopping_metric': stopping_metric,
+             'metric_score': metric_score,
              'decoder': decoder,
-             'decoder_optimizer': decoder_optimizer}
+             'decoder_optimizer': decoder_optimizer,
+             'tracking': tracking}
     filename = 'checkpoint_' + data_name + '.pth.tar'
-    torch.save(state, filename)
+    torch.save(state, os.path.join(outdir, filename))
     # If this checkpoint is the best so far, store a copy so it doesn't get overwritten by a worse checkpoint
     if is_best:
-        torch.save(state, 'BEST_' + str(epoch) + filename)
+        torch.save(state, os.path.join(outdir, 'BEST_' + str(epoch) + '_' + filename))
 
 
 class AverageMeter(object):
     """
     Keeps track of most recent, average, sum, and count of a metric.
     """
-
     def __init__(self):
         self.reset()
 
@@ -237,3 +241,28 @@ def accuracy(scores, targets, k):
     correct = ind.eq(targets.view(-1, 1).expand_as(ind))
     correct_total = correct.view(-1).float().sum()  # 0D tensor
     return correct_total.item() * (100.0 / batch_size)
+
+
+def create_captions_file(im_ids, sentences_tokens, file):
+    preds = []
+    if isinstance(sentences_tokens[0][0], list):
+        imgs = []
+        cap_id = 0
+        for im_id, captions in zip(im_ids, sentences_tokens):
+            for caption in captions:
+                imgs.append({'id': im_id})
+                pred = dict()
+                pred['id'] = cap_id
+                pred['image_id'] = im_id
+                pred['caption'] = ' '.join(caption)
+                cap_id += 1
+                preds.append(pred)
+        preds = {'images': imgs, 'annotations': preds}
+    else:
+        for im_id, caption in zip(im_ids, sentences_tokens):
+            prediction = dict()
+            prediction['image_id'] = im_id
+            prediction['caption'] = ' '.join(caption)
+            preds.append(prediction)
+    with open(file, 'w', encoding='utf-8') as f:
+        json.dump(preds, f)
