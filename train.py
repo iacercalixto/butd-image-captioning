@@ -135,8 +135,6 @@ def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer,
 
     # Batches
     for i, (imgs, caps, caplens) in enumerate(train_loader):
-        if i > 2000:
-            break
         data_time.update(time.time() - start)
 
         # Move to GPU, if available
@@ -222,8 +220,6 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
     with torch.no_grad():
         # for i, (imgs, caps, caplens,allcaps) in enumerate(val_loader):
         for i, (imgs, caps, caplens, orig_caps) in enumerate(val_loader):
-            if i >= 2000:
-                break
             if i % 5 != 0:
                 # only decode every 5th caption, starting from idx 0.
                 # this is because the iterator iterates over all captions in the dataset, not all images.
