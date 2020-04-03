@@ -163,7 +163,7 @@ def init_embedding(embeddings):
 
 
 def save_checkpoint(data_name, epoch, epochs_since_improvement, decoder, decoder_optimizer,
-                    stopping_metric, metric_score, tracking, is_best, outdir):
+                    stopping_metric, metric_score, tracking, is_best, outdir, best_epoch):
     """
     Saves model checkpoint.
 
@@ -174,7 +174,7 @@ def save_checkpoint(data_name, epoch, epochs_since_improvement, decoder, decoder
     :param decoder_optimizer: optimizer to update decoder's weights
     :param stopping_metric: metric to check stopping
     :param metric_score: validation score for this epoch
-    :param tracking: list with past scores
+    :param tracking: dict with list of eval scores and possible test scores
     :param is_best: is this checkpoint the best so far?
     :param outdir: where to store all the files
     """
@@ -184,7 +184,8 @@ def save_checkpoint(data_name, epoch, epochs_since_improvement, decoder, decoder
              'metric_score': metric_score,
              'decoder': decoder,
              'decoder_optimizer': decoder_optimizer,
-             'tracking': tracking}
+             'tracking': tracking,
+             'best_epoch': best_epoch}
     filename = 'checkpoint_' + data_name + '.pth.tar'
     torch.save(state, os.path.join(outdir, filename))
     # If this checkpoint is the best so far, store a copy so it doesn't get overwritten by a worse checkpoint
@@ -245,7 +246,7 @@ def accuracy(scores, targets, k):
 
 def create_captions_file(im_ids, sentences_tokens, file):
     preds = []
-    if isinstance(sentences_tokens[0][0], list):
+    if sentences_tokens[0] != [] and isinstance(sentences_tokens[0][0], list):
         imgs = []
         cap_id = 0
         for im_id, captions in zip(im_ids, sentences_tokens):

@@ -6,6 +6,7 @@ import json
 import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
+import pickle
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence
 from models import DecoderWithAttention
@@ -13,23 +14,27 @@ from datasets import CaptionDataset
 from utils import collate_fn, save_checkpoint, AverageMeter, adjust_learning_rate, accuracy, create_captions_file
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
+from eval import beam_evaluate_butd
+
+word_map = word_map_inv = None
+
 
 def main():
     """
     Training and validation.
     """
 
-    global best_stopping_score, epochs_since_improvement, checkpoint, start_epoch, data_name, word_map, word_map_inv, stopping_metric, tracking
+    global word_map, word_map_inv
 
     # Read word map
-    word_map_file = os.path.join(args.data_folder, 'WORDMAP_' + data_name + '.json')
+    word_map_file = os.path.join(args.data_folder, 'WORDMAP_' + args.data_name + '.json')
     with open(word_map_file, 'r') as j:
         word_map = json.load(j)
         # create inverse word map
     word_map_inv = {v: k for k, v in word_map.items()}
 
     # Initialize / load checkpoint
-    if checkpoint is None:
+    if args.checkpoint is None:
         decoder = DecoderWithAttention(attention_dim=args.attention_dim,
                                        embed_dim=args.emb_dim,
                                        decoder_dim=args.decoder_dim,
@@ -37,16 +42,21 @@ def main():
                                        dropout=args.dropout)
 
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
-
+        tracking = {'eval': [], 'test': None}
+        start_epoch = 0
+        best_epoch = -1
+        epochs_since_improvement = 0  # keeps track of number of epochs since there's been an improvement in validation
+        best_stopping_score = 0.  # stopping_score right now
     else:
-        checkpoint = torch.load(checkpoint)
+        checkpoint = torch.load(args.checkpoint)
         start_epoch = checkpoint['epoch'] + 1
         epochs_since_improvement = checkpoint['epochs_since_improvement']
-        stopping_metric = checkpoint['stopping_metric'],
+        args.stopping_metric = checkpoint['stopping_metric'],
         best_stopping_score = checkpoint['metric_score'],
         decoder = checkpoint['decoder']
         decoder_optimizer = checkpoint['decoder_optimizer'],
-        tracking = checkpoint['tracking']
+        tracking = checkpoint['tracking'],
+        best_epoch = checkpoint['best_epoch']
 
     # Move to GPU, if available
     decoder = decoder.to(device)
@@ -56,10 +66,10 @@ def main():
     criterion_dis = nn.MultiLabelMarginLoss().to(device)
 
     # Custom dataloaders
-    train_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, data_name, 'TRAIN'),
+    train_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, args.data_name, 'TRAIN'),
                                                batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.workers, pin_memory=True)
-    val_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, data_name, 'VAL'),
+    val_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, args.data_name, 'VAL'),
                                              collate_fn=collate_fn,
                                              # use our specially designed collate function with valid/test only
                                              batch_size=1, shuffle=False,
@@ -96,8 +106,8 @@ def main():
                                   criterion_ce=criterion_ce,
                                   criterion_dis=criterion_dis,
                                   epoch=epoch)
-        tracking.append(recent_results)
-        recent_stopping_score = recent_results[stopping_metric]
+        tracking['eval'] = recent_results
+        recent_stopping_score = recent_results[args.stopping_metric]
 
         # Check if there was an improvement
         is_best = recent_stopping_score > best_stopping_score
@@ -107,10 +117,19 @@ def main():
             print("\nEpochs since last improvement: %d\n" % (epochs_since_improvement,))
         else:
             epochs_since_improvement = 0
+            best_epoch = epoch
 
         # Save checkpoint
-        save_checkpoint(data_name, epoch, epochs_since_improvement, decoder, decoder_optimizer,
-                        stopping_metric, best_stopping_score, tracking, is_best, args.outdir)
+        save_checkpoint(args.data_name, epoch, epochs_since_improvement, decoder, decoder_optimizer,
+                        args.stopping_metric, best_stopping_score, tracking, is_best, args.outdir, best_epoch)
+
+    # if needed, run an beamsearch evaluation on the test set
+    if args.test_at_end:
+        checkpoint_file = 'BEST_' + str(best_epoch) + '_' + 'checkpoint_' + args.data_name + '.pth.tar'
+        results = beam_evaluate_butd(args.data_name, checkpoint_file, args.data_folder, args.beam_size, args.outdir)
+        tracking['test'] = results
+    with open(os.path.join(args.outdir, 'TRACKING.'+args.data_name+'.pkl'), 'wb') as f:
+        pickle.dump(tracking, f)
 
 
 def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer, epoch):
@@ -135,6 +154,7 @@ def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer,
 
     # Batches
     for i, (imgs, caps, caplens) in enumerate(train_loader):
+
         data_time.update(time.time() - start)
 
         # Move to GPU, if available
@@ -220,6 +240,7 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
     with torch.no_grad():
         # for i, (imgs, caps, caplens,allcaps) in enumerate(val_loader):
         for i, (imgs, caps, caplens, orig_caps) in enumerate(val_loader):
+
             if i % 5 != 0:
                 # only decode every 5th caption, starting from idx 0.
                 # this is because the iterator iterates over all captions in the dataset, not all images.
@@ -312,8 +333,8 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
     # bleu4 = corpus_bleu(references, hypotheses)
     # bleu4 = round(bleu4, 4)
     # compute the metrics
-    hypotheses_file = os.path.join(args.outdir, 'hypotheses', 'Epoch{:0>3d}.Predictions.json'.format(epoch))
-    references_file = os.path.join(args.outdir, 'references', 'Epoch{:0>3d}.Predictions.json'.format(epoch))
+    hypotheses_file = os.path.join(args.outdir, 'hypotheses', 'Epoch{:0>3d}.Hypotheses.json'.format(epoch))
+    references_file = os.path.join(args.outdir, 'references', 'Epoch{:0>3d}.References.json'.format(epoch))
     create_captions_file(range(len(hypotheses)), hypotheses, hypotheses_file)
     create_captions_file(range(len(references)), references, references_file)
     coco = COCO(references_file)
@@ -330,7 +351,7 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
     results['loss'] = losses.avg
     results['top5'] = top5accs.avg
 
-    for k,v in results.items():
+    for k, v in results.items():
         print(k+':\t'+str(v))
     # print('\n * LOSS - {loss.avg:.3f}, TOP-5 ACCURACY - {top5.avg:.3f}, BLEU-4 - {bleu}, CIDEr - {cider}\n'
     #       .format(loss=losses, top5=top5accs, bleu=round(results['Bleu_4'], 4), cider=round(results['CIDEr'], 1)))
@@ -365,6 +386,8 @@ if __name__ == '__main__':
                         help='which architecture to use')
     parser.add_argument('--stopping_metric', default='Bleu_4', type=str, choices=metrics,
                         help='which metric to use for early stopping')
+    parser.add_argument('--test_at_end', default=True, type=bool, help='If there should be tested on the test split')
+    parser.add_argument('--beam_size', default=5, type=int, help='If test at end, beam size to use for testing.')
     # Parse the arguments
     args = parser.parse_args()
 
@@ -376,11 +399,6 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     # Training parameters
-    tracking = []
-    start_epoch = 0
-    epochs_since_improvement = 0  # keeps track of number of epochs since there's been an improvement in validation
-    stopping_metric = args.stopping_metric
-    best_stopping_score = 0.  # stopping_score right now
     args.outdir = os.path.join(args.outdir,
                                args.architecture,
                                'batch_size-{bs}_epochs-{ep}_dropout-{drop}'.format(bs=args.batch_size, ep=args.epochs,
@@ -412,6 +430,4 @@ if __name__ == '__main__':
     else:
         os.makedirs(os.path.join(args.outdir, 'hypotheses'), exist_ok=True)
         os.makedirs(os.path.join(args.outdir, 'references'), exist_ok=True)
-    checkpoint = args.checkpoint
-    data_name = args.data_name
     main()

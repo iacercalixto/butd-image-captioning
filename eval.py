@@ -1,39 +1,34 @@
 import os
+import json
 import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
-import torchvision.transforms as transforms
-from datasets import *
-from utils import *
-from nltk.translate.bleu_score import corpus_bleu
+from datasets import CaptionDataset
+from utils import collate_fn, create_captions_file
 import torch.nn.functional as F
 from tqdm import tqdm
-from nlgeval import NLGEval
 import argparse
+from pycocotools.coco import COCO
+from pycocoevalcap.eval import COCOEvalCap
 
-# Default parameters
-data_folder = 'final_dataset'  # folder with data files saved by create_input_files.py
-data_name = 'coco_5_cap_per_img_5_min_word_freq'  # base name shared by data files
-checkpoint_file = os.path.join("saved_checkpoints", "BEST_48checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar")
-#checkpoint_file = os.path.join("saved_checkpoints", "BEST_0checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar")
-word_map_file = 'WORDMAP_coco_5_cap_per_img_5_min_word_freq.json'  # word map, ensure it's the same the data was encoded with and the model was trained with
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # sets device for model and PyTorch tensors
-cudnn.benchmark = True  # set to true only if inputs to model are fixed size; otherwise lot of computational overhead
-nlgeval = NLGEval()  # loads the evaluator
 
-def evaluate(checkpoint_file, data_folder, beam_size):
+def beam_evaluate_butd(data_name, checkpoint_file, data_folder, beam_size, outdir):
     """
     Evaluation
-
+    :param data_name: name of the data files
+    :param checkpoint_file: which checkpoint file to use
+    :param data_folder: folder where data is stored
     :param beam_size: beam size at which to generate captions for evaluation
+    :param outdir: place where the outputs are stored, so the checkpoint file
     :return: Official MSCOCO evaluator scores - bleu4, cider, rouge, meteor
     """
     global word_map
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def load_model():
         # Load model using checkpoint file provided
         torch.nn.Module.dump_patches = True
-        checkpoint = torch.load(checkpoint_file, map_location = device)
+        checkpoint = torch.load(os.path.join(outdir, checkpoint_file), map_location=device)
         decoder = checkpoint['decoder']
         decoder = decoder.to(device)
         decoder.eval()
@@ -67,15 +62,15 @@ def evaluate(checkpoint_file, data_folder, beam_size):
     for caption_idx, (image_features, caps, caplens, orig_caps) in enumerate(
             tqdm(loader, desc="EVALUATING AT BEAM SIZE " + str(beam_size))):
 
-        if caption_idx%5 != 0:
+        if caption_idx % 5 != 0:
             continue
 
         k = beam_size
 
         # Move to GPU device, if available
-        image_features = image_features.to(device)  # (1, 3, 256, 256)
+        image_features = image_features.to(device)  # (1, 36, 2048)
         image_features_mean = image_features.mean(1)
-        image_features_mean = image_features_mean.expand(k,2048)
+        image_features_mean = image_features_mean.expand(k, 2048)
 
         # Tensor to store top k previous words at each step; now they're just <start>
         k_prev_words = torch.LongTensor([[word_map['<start>']]] * k).to(device)  # (k, 1)
@@ -99,13 +94,10 @@ def evaluate(checkpoint_file, data_folder, beam_size):
         while True:
 
             embeddings = decoder.embedding(k_prev_words).squeeze(1)  # (s, embed_dim)
-            h1,c1 = decoder.top_down_attention(
-                torch.cat([h2,image_features_mean,embeddings], dim=1),
-                (h1,c1))  # (batch_size_t, decoder_dim)
-            attention_weighted_encoding = decoder.attention(image_features,h1)
-            h2,c2 = decoder.language_model(
-                torch.cat([attention_weighted_encoding,h1], dim=1),(h2,c2))
-
+            h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, embeddings], dim=1),
+                                                (h1, c1))  # (batch_size_t, decoder_dim)
+            attention_weighted_encoding = decoder.attention(image_features, h1)
+            h2, c2 = decoder.language_model(torch.cat([attention_weighted_encoding, h1], dim=1), (h2, c2))
             scores = decoder.fc(h2)  # (s, vocab_size)
             scores = F.log_softmax(scores, dim=1)
 
@@ -158,31 +150,51 @@ def evaluate(checkpoint_file, data_folder, beam_size):
         seq = complete_seqs[i]
 
         # References
-        img_caps = [' '.join(c) for c in orig_caps]
-        #print(img_caps)
+        # img_caps = [' '.join(c) for c in orig_caps]
+        img_caps = [c for c in orig_caps]
         references.append(img_caps)
 
         # Hypotheses
         hypothesis = ([rev_word_map[w] for w in seq if w not in {word_map['<start>'], word_map['<end>'], word_map['<pad>']}])
-        hypothesis = ' '.join(hypothesis)
-        #print(hypothesis)
+        # hypothesis = ' '.join(hypothesis)
         hypotheses.append(hypothesis)
         assert len(references) == len(hypotheses)
 
     # Calculate scores
-    metrics_dict = nlgeval.compute_metrics(references, hypotheses)
-    return metrics_dict
+    # metrics_dict = nlgeval.compute_metrics(references, hypotheses)
+    hypotheses_file = os.path.join(outdir, 'hypotheses', 'TEST.Hypotheses.json')
+    references_file = os.path.join(outdir, 'references', 'TEST.References.json')
+    create_captions_file(range(len(hypotheses)), hypotheses, hypotheses_file)
+    create_captions_file(range(len(references)), references, references_file)
+    coco = COCO(references_file)
+    # add the predicted results to the object
+    coco_results = coco.loadRes(hypotheses_file)
+    # create the evaluation object with both the ground-truth and the predictions
+    coco_eval = COCOEvalCap(coco, coco_results)
+    # change to use the image ids in the results object, not those from the ground-truth
+    coco_eval.params['image_id'] = coco_results.getImgIds()
+    # run the evaluation
+    coco_eval.evaluate(verbose=False, metrics=['bleu', 'meteor', 'rouge', 'cider'])
+    # Results contains: "Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4", "METEOR", "ROUGE_L", "CIDEr", "SPICE"
+    results = coco_eval.eval
+    return results
 
 
 if __name__ == '__main__':
-    beam_size = 5
-    p = argparse.ArgumentParser()
-    p.add_argument('--checkpoint_file', type=str, required=True, help="Checkpoint to use for beam search.")
-    p.add_argument('--beam_size', type=int, default=beam_size, 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_folder', default='final_dataset', type=str,
+                        help='folder with data files saved by create_input_files.py')
+    parser.add_argument('--data_name', default='coco_5_cap_per_img_5_min_word_freq', type=str,
+                        help='base name shared by data files')
+    parser.add_argument('--outdir', default='outputs', type=str,
+                        help='path to location where the outputs are saved, so the checkpoint')
+    parser.add_argument('--checkpoint_file', type=str, required=True, help="Checkpoint to use for beam search.")
+    parser.add_argument('--beam_size', type=int, default=5,
             help="Beam size to use with beam search. If set to one we run greedy search.")
-    p.add_argument('--data_folder', type=str, default='final_dataset',
+    parser.add_argument('--data_folder', type=str, default='final_dataset',
             help="Folder where one will find the preprocessed data and original captions.")
-    args = p.parse_args()
-
-    metrics_dict = evaluate(args.checkpoint_file, args.data_folder, args.beam_size)
+    args = parser.parse_args()
+    cudnn.benchmark = True  # True only if inputs to model are fixed size, otherwise lot of computational overhead
+    metrics_dict = beam_evaluate_butd(args.data_name, args.checkpoint_file, args.data_folder,
+                                      args.beam_size, args.outdir)
     print(metrics_dict)
