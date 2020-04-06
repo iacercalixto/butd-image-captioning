@@ -58,12 +58,12 @@ class CaptionDataset(Dataset):
         
         # Load bottom up image features
         if objdet[0] == "v":
-            img = torch.FloatTensor(self.val_features[objdet[1]])
+            img = torch.tensor(self.val_features[objdet[1]], dtype=torch.float)
         else:
-            img = torch.FloatTensor(self.train_features[objdet[1]])
+            img = torch.tensor(self.train_features[objdet[1]], dtype=torch.float)
 
-        caption = torch.LongTensor(self.captions[i])
-        caplen = torch.LongTensor([self.caplens[i]])
+        caption = torch.tensor(self.captions[i], dtype=torch.long)
+        caplen = torch.tensor([self.caplens[i]], dtype=torch.long)
         
         if self.split is 'TRAIN':
             return img, caption, caplen
