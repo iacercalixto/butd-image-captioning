@@ -178,8 +178,10 @@ def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer,
 
         # Remove timesteps that we didn't decode at, or are pads
         # pack_padded_sequence is an easy trick to do this
-        scores, _ = pack_padded_sequence(scores, decode_lengths, batch_first=True)
-        targets, _ = pack_padded_sequence(targets, decode_lengths, batch_first=True)
+        scores = pack_padded_sequence(scores, decode_lengths, batch_first=True, enforce_sorted=True).data
+        targets = pack_padded_sequence(targets, decode_lengths, batch_first=True, enforce_sorted=True).data
+        #scores, _ = pack_padded_sequence(scores, decode_lengths, batch_first=True)
+        #targets, _ = pack_padded_sequence(targets, decode_lengths, batch_first=True)
 
         # Calculate loss
         loss_d = criterion_dis(scores_d, targets_d.long())
@@ -274,8 +276,10 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
             # Remove timesteps that we didn't decode at, or are pads
             # pack_padded_sequence is an easy trick to do this
             scores_copy = scores.clone()
-            scores, _ = pack_padded_sequence(scores, decode_lengths, batch_first=True)
-            targets, _ = pack_padded_sequence(targets, decode_lengths, batch_first=True)
+            scores = pack_padded_sequence(scores, decode_lengths, batch_first=True, enforce_sorted=True).data
+            targets = pack_padded_sequence(targets, decode_lengths, batch_first=True, enforce_sorted=True).data
+            #scores, _ = pack_padded_sequence(scores, decode_lengths, batch_first=True)
+            #targets, _ = pack_padded_sequence(targets, decode_lengths, batch_first=True)
 
             # Calculate loss
             loss_d = criterion_dis(scores_d, targets_d.long())
@@ -394,8 +398,8 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # sets device for model and PyTorch tensors
     # setup initial stuff for reproducability
     cudnn.benchmark = True  # set to true only if inputs to model are fixed size otherwise lot of computational overhead
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    cudnn.deterministic = True
+    #torch.backends.cudnn.benchmark = False
     torch.manual_seed(args.seed)
 
     # Training parameters
