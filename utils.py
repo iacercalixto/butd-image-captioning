@@ -8,12 +8,20 @@ from random import seed, choice, sample
 import pickle
 import dgl
 
+
 def collate_fn(batch):
     """ Collate function to be used when iterating captioning datasets.
         Only use with batch size == 1.
     """
-    image_features, caps, caplens, orig_caps = zip(*batch)
-    return torch.stack(image_features), torch.stack(caps), torch.stack(caplens), orig_caps[0]
+    zip_b = zip(*batch)
+    if len(zip_b) == 4:
+        image_features, caps, caplens, orig_caps = zip_b
+        r = (torch.stack(image_features), torch.stack(caps), torch.stack(caplens), orig_caps[0])
+    else:
+        (obj, rel, caps, caplens, orig_caps, obj_mask, rel_mask, pair_idx) = zip_b
+        r = (torch.stack(obj), torch.stack(rel), torch.stack(caps), torch.stack(caplens), orig_caps[0],
+             torch.stack(obj_mask), torch.stack(rel_mask), torch.stack(pair_idx))
+    return r
 
 
 def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_freq,output_folder,max_len=100):
