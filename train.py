@@ -9,7 +9,7 @@ import torch.utils.data
 import pickle
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence
-from models import DecoderWithAttention
+from models import BUTDDecoder, IODecoder
 from datasets import CaptionDataset
 from utils import collate_fn, save_checkpoint, AverageMeter, adjust_learning_rate, accuracy, create_captions_file
 from pycocotools.coco import COCO
@@ -17,6 +17,7 @@ from pycocoevalcap.eval import COCOEvalCap
 from eval import beam_evaluate_butd
 
 word_map = word_map_inv = None
+scene_graph = False
 
 
 def main():
@@ -24,7 +25,7 @@ def main():
     Training and validation.
     """
 
-    global word_map, word_map_inv
+    global word_map, word_map_inv, scene_graph
 
     # Read word map
     word_map_file = os.path.join(args.data_folder, 'WORDMAP_' + args.data_name + '.json')
@@ -35,11 +36,25 @@ def main():
 
     # Initialize / load checkpoint
     if args.checkpoint is None:
-        decoder = DecoderWithAttention(attention_dim=args.attention_dim,
-                                       embed_dim=args.emb_dim,
-                                       decoder_dim=args.decoder_dim,
-                                       vocab_size=len(word_map),
-                                       dropout=args.dropout)
+        if args.architecture == 'bottomup_topdown':
+            decoder = BUTDDecoder(attention_dim=args.attention_dim,
+                                  embed_dim=args.emb_dim,
+                                  decoder_dim=args.decoder_dim,
+                                  vocab_size=len(word_map),
+                                  dropout=args.dropout)
+        elif args.architecture == 'io':
+            decoder = IODecoder(attention_dim=args.attention_dim,
+                                embed_dim=args.emb_dim,
+                                decoder_dim=args.decoder_dim,
+                                vocab_size=len(word_map),
+                                dropout=args.dropout,
+                                use_obj_info=args.use_obj_info,
+                                use_rel_info=args.use_rel_info,
+                                k_update_steps=args.k_update_steps,
+                                update_relations=args.update_relations)
+            scene_graph = True
+        else:
+            exit('unknown architecture chosen')
 
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
         tracking = {'eval': [], 'test': None}
@@ -66,10 +81,12 @@ def main():
     criterion_dis = nn.MultiLabelMarginLoss().to(device)
 
     # Custom dataloaders
-    train_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, args.data_name, 'TRAIN'),
+    train_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, args.data_name, 'TRAIN',
+                                                              scene_graph=scene_graph),
                                                batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.workers, pin_memory=True)
-    val_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, args.data_name, 'VAL'),
+    val_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, args.data_name, 'VAL',
+                                                            scene_graph=scene_graph),
                                              collate_fn=collate_fn,
                                              # use our specially designed collate function with valid/test only
                                              batch_size=1, shuffle=False,
@@ -84,13 +101,6 @@ def main():
             break
         if epochs_since_improvement > 0 and epochs_since_improvement % 8 == 0:
             adjust_learning_rate(decoder_optimizer, 0.8)
-
-        # # One epoch's validation
-        # recent_bleu4 = validate(val_loader=val_loader,
-        #                         decoder=decoder,
-        #                         criterion_ce=criterion_ce,
-        #                         criterion_dis=criterion_dis,
-        #                         epoch=epoch)
 
         # One epoch's training
         train(train_loader=train_loader,
@@ -153,17 +163,33 @@ def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer,
     start = time.time()
 
     # Batches
-    for i, (imgs, caps, caplens) in enumerate(train_loader):
-
+    for i, sample in enumerate(train_loader):
+        if scene_graph:
+            (obj, rel, caps, caplens, obj_mask, rel_mask, pair_idx) = sample
+            obj = obj.to(device)
+            rel = rel.to(device)
+            obj_mask = obj_mask.to(device)
+            rel_mask = rel_mask.to(device)
+            pair_idx = pair_idx.to(device)
+        else:
+            (imgs, caps, caplens) = sample
+            imgs = imgs.to(device)
         data_time.update(time.time() - start)
 
         # Move to GPU, if available
-        imgs = imgs.to(device)
         caps = caps.to(device)
         caplens = caplens.to(device)
-
         # Forward prop.
-        scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
+        if scene_graph:
+                scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(object_features=obj,
+                                                                                  relation_features=rel,
+                                                                                  encoded_captions=caps,
+                                                                                  caption_lengths=caplens,
+                                                                                  object_mask=obj_mask,
+                                                                                  relation_mask=rel_mask,
+                                                                                  rel_pair_idx=pair_idx)
+        else:
+            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
 
         # Max-pooling across predicted words across time steps for discriminative supervision
         scores_d = scores_d.max(1)[0]
@@ -241,7 +267,7 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
     # Batches
     with torch.no_grad():
         # for i, (imgs, caps, caplens,allcaps) in enumerate(val_loader):
-        for i, (imgs, caps, caplens, orig_caps) in enumerate(val_loader):
+        for i, sample in enumerate(val_loader):
 
             if i % 5 != 0:
                 # only decode every 5th caption, starting from idx 0.
@@ -255,12 +281,32 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
                                                                                     loss=losses, top5=top5accs))
                 continue
 
+            if scene_graph:
+                (obj, rel, caps, caplens, orig_caps, obj_mask, rel_mask, pair_idx) = sample
+                obj = obj.to(device)
+                rel = rel.to(device)
+                obj_mask = obj_mask.to(device)
+                rel_mask = rel_mask.to(device)
+                pair_idx = pair_idx.to(device)
+            else:
+                (imgs, caps, caplens, orig_caps) = sample
+                imgs = imgs.to(device)
+
             # Move to device, if available
-            imgs = imgs.to(device)
             caps = caps.to(device)
             caplens = caplens.to(device)
 
-            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
+            # Forward prop.
+            if scene_graph:
+                scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(object_features=obj,
+                                                                                  relation_features=rel,
+                                                                                  encoded_captions=caps,
+                                                                                  caption_lengths=caplens,
+                                                                                  object_mask=obj_mask,
+                                                                                  relation_mask=rel_mask,
+                                                                                  rel_pair_idx=pair_idx)
+            else:
+                scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
 
             # Max-pooling across predicted words across time steps for discriminative supervision
             scores_d = scores_d.max(1)[0]
@@ -386,12 +432,23 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
     parser.add_argument('--epochs', default=50, type=int,
                         help='number of epochs to train for (if early stopping is not triggered)')
-    parser.add_argument('--architecture', default='bottomup_topdown', type=str, choices=['bottomup_topdown'],
+    parser.add_argument('--architecture', default='bottomup_topdown', type=str,
+                        choices=['bottomup_topdown', 'io'],
                         help='which architecture to use')
     parser.add_argument('--stopping_metric', default='Bleu_4', type=str, choices=metrics,
                         help='which metric to use for early stopping')
     parser.add_argument('--test_at_end', default=True, type=bool, help='If there should be tested on the test split')
     parser.add_argument('--beam_size', default=5, type=int, help='If test at end, beam size to use for testing.')
+    # SETTINGS FOR IO DECODER MODEL
+    parser.add_argument('--use_rel_info', default=True, type=bool, help='sue incoming rel info. For IO')
+    parser.add_argument('--use_obj_info', default=True, type=bool, help='use incoming obj info. For IO')
+    parser.add_argument('--k_update_steps', default=1, type=int, help='How many update steps to do. For IO and Transformer')
+    parser.add_argument('--update_relations', default=False, type=int, help='When more then 1 step, update the rels. For IO')
+    # TRANSFORMER DECODER SETTINGS
+    parser.add_argument('--num_heads', default=6, type=int, help='sue incoming rel info. For Transformer')
+    parser.add_argument('--num_layers', default=4, type=int, help='use incoming obj info. For Transformer')
+    parser.add_argument('--transformer_dim', default=1024, type=int, help='How many update steps to do. For Transformer')
+
     # Parse the arguments
     args = parser.parse_args()
 
@@ -403,12 +460,21 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     # Training parameters
+    if args.architecture == 'io':
+        arch_specific_dir = 'relinfo-{rel}_objinfo-{obj}_ksteps-{k}_updaterel-{up}'.format(
+            rel=args.use_rel_info, obj=args.use_obj_info, k=args.k_update_steps, up=args.update_relations)
+    elif args.architecture == 'transformer':
+        arch_specific_dir = 'layers-{l}_heads-{h}_dim-{d}_ksteps-{k}'.format(
+            l=args.num_layers, h=args.num_heads, k=args.k_update_steps, d=args.transformer_dim)
+    else:
+        arch_specific_dir = ''
     args.outdir = os.path.join(args.outdir,
                                args.architecture,
                                'batch_size-{bs}_epochs-{ep}_dropout-{drop}'.format(bs=args.batch_size, ep=args.epochs,
                                                                                    drop=args.dropout),
                                'emb-{emb}_att-{att}_dec-{dec}'.format(emb=args.emb_dim, att=args.attention_dim,
                                                                       dec=args.decoder_dim),
+                               arch_specific_dir,
                                'seed-{}'.format(args.seed))
     if os.path.exists(args.outdir) and args.checkpoint is None:
         answer = input("\n\t!! WARNING !! \nthe specified --outdir already exists, "

@@ -1,12 +1,12 @@
 import os
 import numpy as np
-import h5py
 import json
 import torch
 from tqdm import tqdm
 from collections import Counter
 from random import seed, choice, sample
 import pickle
+import dgl
 
 def collate_fn(batch):
     """ Collate function to be used when iterating captioning datasets.
@@ -151,6 +151,61 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
         json.dump(test_image_det, j)
 
 
+def create_scene_graph_input_files(dataset, karpathy_json_path, output_folder):
+    """
+    Creates input files for training, validation, and test data.
+
+    :param dataset: name of dataset. Since bottom up features only available for coco, we use only coco
+    :param karpathy_json_path: path of Karpathy JSON file with splits and captions
+    :param captions_per_image: number of captions to sample per image
+    :param min_word_freq: words occuring less frequently than this threshold are binned as <unk>s
+    :param output_folder: folder to save files
+    :param max_len: don't sample captions longer than this length
+    """
+
+    assert dataset in {'coco'}
+
+    # Read Karpathy JSON
+    with open(karpathy_json_path, 'r') as j:
+        data = json.load(j)
+    with open(os.path.join(output_folder, 'train_scene-graph_imgid2idx.pkl'), 'rb') as j:
+        train_data = pickle.load(j)
+    with open(os.path.join(output_folder, 'val_scene-graph_imgid2idx.pkl'), 'rb') as j:
+        val_data = pickle.load(j)
+
+    # Read image paths and captions for each image
+    train_image_det = []
+    val_image_det = []
+    test_image_det = []
+    word_freq = Counter()
+    for img in data['images']:
+        image_id = img['filename'].split('_')[2]
+        image_id = int(image_id.lstrip("0").split('.')[0])
+
+        if img['split'] in {'train', 'restval'}:
+            if img['filepath'] == 'train2014':
+                if image_id in train_data:
+                    train_image_det.append(("t", train_data[image_id]))
+            else:
+                if image_id in val_data:
+                    train_image_det.append(("v", val_data[image_id]))
+        elif img['split'] in {'val'}:
+            if image_id in val_data:
+                val_image_det.append(("v", val_data[image_id]))
+        elif img['split'] in {'test'}:
+            if image_id in val_data:
+                test_image_det.append(("v", val_data[image_id]))
+
+    # Save bottom up features indexing to JSON files
+    with open(os.path.join(output_folder, 'TRAIN_SCENE_GRAPHS_FEATURES_'+dataset+'.json'), 'w') as j:
+        json.dump(train_image_det, j)
+
+    with open(os.path.join(output_folder, 'VAL_SCENE_GRAPHS_FEATURES_'+dataset+'.json'), 'w') as j:
+        json.dump(val_image_det, j)
+
+    with open(os.path.join(output_folder, 'TEST_SCENE_GRAPHS_FEATURES_'+dataset+'.json'), 'w') as j:
+        json.dump(test_image_det, j)
+
 
 def init_embedding(embeddings):
     """
@@ -267,3 +322,18 @@ def create_captions_file(im_ids, sentences_tokens, file):
             preds.append(prediction)
     with open(file, 'w', encoding='utf-8') as f:
         json.dump(preds, f)
+
+def create_batched_graphs(o, om, r, rm, pairs, test=False):
+    bsz = o.size(0)
+    graphs = []
+    pairs = pairs.detach().cpu().numpy()
+    for b in range(bsz):
+        graph = dgl.DGLGraph()
+        graph.add_nodes(num=om[b].sum())
+        graph.ndata['F_n'] = o[b, om[b]]
+        cpu_mask = rm[b].detach().cpu()
+        graph.add_edges(pairs[b][cpu_mask, 0], pairs[b][cpu_mask, 1])
+        graph.edata['F_e'] = r[b, rm[b]]
+        graphs.append(graph)
+    b_graphs = dgl.batch(graphs)
+    return b_graphs

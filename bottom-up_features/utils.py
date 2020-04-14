@@ -37,6 +37,17 @@ def load_imageid(folder):
     return img_ids
 
 
+def load_imageinfo(folder):
+    images = load_folder(folder, 'jpg')
+    img_ids = set()
+    img_files = {}
+    for img in images:
+        img_id = int(img.split('/')[-1].split('.')[0].split('_')[-1])
+        img_ids.add(img_id)
+        img_files[img_id] = img
+    return img_ids, img_files
+
+
 def pil_loader(path):
     with open(path, 'rb') as f:
         with Image.open(f) as img:
