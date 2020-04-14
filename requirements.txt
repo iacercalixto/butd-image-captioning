@@ -1,0 +1,12 @@
+torch==1.4
+torchvision==0.5
+h5py
+tqdm
+nltk
+numpy
+dgl
+yacs
+easydict
+matplotlib
+scikit-image
+
