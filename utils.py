@@ -17,9 +17,9 @@ def collate_fn(batch):
         image_features, caps, caplens, orig_caps = zip(*batch)
         r = (torch.stack(image_features), torch.stack(caps), torch.stack(caplens), orig_caps[0])
     else:
-        (obj, rel, caps, caplens, orig_caps, obj_mask, rel_mask, pair_idx) = zip(*batch)
-        r = (torch.stack(obj), torch.stack(rel), torch.stack(caps), torch.stack(caplens), orig_caps[0],
-             torch.stack(obj_mask), torch.stack(rel_mask), torch.stack([torch.as_tensor(p) for p in pair_idx]))
+        (img, obj, rel, obj_mask, rel_mask, caps, caplens, orig_caps) = zip(*batch)
+        r = (torch.stack(img), torch.stack(obj), torch.stack(rel), torch.stack(obj_mask), torch.stack(rel_mask),
+             torch.stack(caps), torch.stack(caplens), orig_caps[0])
     return r
 
 

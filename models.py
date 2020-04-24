@@ -47,7 +47,8 @@ class Decoder(nn.Module):
     Decoder.
     """
 
-    def __init__(self, attention_dim, embed_dim, decoder_dim, vocab_size, features_dim=2048, dropout=0.5):
+    def __init__(self, attention_dim, embed_dim, decoder_dim, vocab_size, features_dim=2048,
+                 graph_features_dim=512, dropout=0.5):
         """
         :param attention_dim: size of attention network
         :param embed_dim: embedding size
@@ -65,12 +66,15 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout = dropout
 
-        self.attention = Attention(features_dim, decoder_dim, attention_dim)  # attention network
+        # cascade attention network
+        self.cascade1_attention = Attention(graph_features_dim, decoder_dim, attention_dim)
+        self.cascade2_attention = Attention(features_dim, decoder_dim + graph_features_dim, attention_dim)
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
         self.dropout = nn.Dropout(p=self.dropout)
-        self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + decoder_dim, decoder_dim, bias=True) # top down attention LSTMCell
-        self.language_model = nn.LSTMCell(features_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
+        self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + graph_features_dim + decoder_dim,
+                                              decoder_dim, bias=True) # top down attention LSTMCell
+        self.language_model = nn.LSTMCell(features_dim + graph_features_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
         self.fc1 = weight_norm(nn.Linear(decoder_dim, vocab_size))
         self.fc = weight_norm(nn.Linear(decoder_dim, vocab_size))  # linear layer to find scores over vocabulary
         self.init_weights()  # initialize some layers with the uniform distribution
@@ -83,20 +87,22 @@ class Decoder(nn.Module):
         self.fc.bias.data.fill_(0)
         self.fc.weight.data.uniform_(-0.1, 0.1)
 
-    def init_hidden_state(self,batch_size):
+    def init_hidden_state(self, batch_size):
         """
         Creates the initial hidden and cell states for the decoder's LSTM based on the encoded images.
-        :param encoder_out: encoded images, a tensor of dimension (batch_size, num_pixels, encoder_dim)
+        :param batch_size: size of the batch
         :return: hidden state, cell state
         """
-        h = torch.zeros(batch_size,self.decoder_dim).to(device)  # (batch_size, decoder_dim)
-        c = torch.zeros(batch_size,self.decoder_dim).to(device)
+        h = torch.zeros(batch_size, self.decoder_dim).to(device)  # (batch_size, decoder_dim)
+        c = torch.zeros(batch_size, self.decoder_dim).to(device)
         return h, c
 
-    def forward(self, image_features, encoded_captions, caption_lengths):
+    def forward(self, image_features, graph_features, graph_mask, encoded_captions, caption_lengths):
         """
         Forward propagation.
-        :param encoder_out: encoded images, a tensor of dimension (batch_size, enc_image_size, enc_image_size, encoder_dim)
+        :param image_features: encoded images, a tensor of dimension (batch_size, enc_image_size, enc_image_size, encoder_dim)
+        :param graph_features: encoded images as graphs, a tensor of dimension (batch_size, enc_image_size, enc_image_size, encoder_dim)
+        :param graph_mask: mask for the graph_features, shows were non empty features are
         :param encoded_captions: encoded captions, a tensor of dimension (batch_size, max_caption_length)
         :param caption_lengths: caption lengths, a tensor of dimension (batch_size, 1)
         :return: scores for vocabulary, sorted encoded captions, decode lengths, weights, sort indices
@@ -107,11 +113,16 @@ class Decoder(nn.Module):
 
         # Flatten image
         image_features_mean = image_features.mean(1).to(device)  # (batch_size, num_pixels, encoder_dim)
+        graph_features_mean = graph_features.sum(dim=1)/graph_mask.sum(dim=1, keepdim=True)
+        graph_features_mean = graph_features_mean.to(device)
 
         # Sort input data by decreasing lengths; why? apparent below
         caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
         image_features = image_features[sort_ind]
+        graph_features = graph_features[sort_ind]
+        graph_mask = graph_mask[sort_ind]
         image_features_mean = image_features_mean[sort_ind]
+        graph_features_mean = graph_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
 
         # Embedding
@@ -135,14 +146,20 @@ class Decoder(nn.Module):
         # are then passed to the language model 
         for t in range(max(decode_lengths)):
             batch_size_t = sum([l > t for l in decode_lengths])
-            h1,c1 = self.top_down_attention(torch.cat([h2[:batch_size_t],
-                                                       image_features_mean[:batch_size_t],
-                                                       embeddings[:batch_size_t, t, :]], dim=1),
-                                            (h1[:batch_size_t], c1[:batch_size_t]))
-            attention_weighted_encoding = self.attention(image_features[:batch_size_t],h1[:batch_size_t])
+            h1, c1 = self.top_down_attention(torch.cat([h2[:batch_size_t],
+                                                        image_features_mean[:batch_size_t],
+                                                        graph_features_mean[:batch_size_t],
+                                                        embeddings[:batch_size_t, t, :]], dim=1),
+                                             (h1[:batch_size_t], c1[:batch_size_t]))
+            graph_weighted_enc = self.cascade1_attention(graph_features[:batch_size_t], h1[:batch_size_t],
+                                                         mask=graph_mask[:batch_size_t])
+            img_weighted_enc = self.cascade2_attention(image_features[:batch_size_t],
+                                                       torch.cat([h1[:batch_size_t], graph_weighted_enc[:batch_size_t]],
+                                                                 dim=1))
             preds1 = self.fc1(self.dropout(h1))
-            h2,c2 = self.language_model(
-                torch.cat([attention_weighted_encoding[:batch_size_t],h1[:batch_size_t]], dim=1),
+
+            h2, c2 = self.language_model(
+                torch.cat([graph_weighted_enc[:batch_size_t], img_weighted_enc[:batch_size_t], h1[:batch_size_t]], dim=1),
                 (h2[:batch_size_t], c2[:batch_size_t]))
             preds = self.fc(self.dropout(h2))  # (batch_size_t, vocab_size)
             predictions[:batch_size_t, t, :] = preds

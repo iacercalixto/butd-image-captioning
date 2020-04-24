@@ -12,7 +12,7 @@ from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
 
 
-def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir):
+def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, graph_feature_dim=512):
     """
     Evaluation
     :param data_name: name of the data files
@@ -59,7 +59,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir):
     hypotheses = list()
 
     # For each image
-    for caption_idx, (image_features, caps, caplens, orig_caps) in enumerate(
+    for caption_idx, (image_features, obj, rel, obj_mask, rel_mask, caps, caplens, orig_caps) in enumerate(
             tqdm(loader, desc="EVALUATING AT BEAM SIZE " + str(beam_size))):
 
         if caption_idx % 5 != 0:
@@ -67,10 +67,18 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir):
 
         k = beam_size
 
+        graphs = torch.cat([obj, rel], dim=1)
+        graphs_mask = torch.cat([obj_mask, rel_mask], dim=1)
+
         # Move to GPU device, if available
         image_features = image_features.to(device)  # (1, 36, 2048)
+        graphs = graphs.to(device)
+        graphs_mask = graphs_mask.to(device)
         image_features_mean = image_features.mean(1)
         image_features_mean = image_features_mean.expand(k, 2048)
+        graph_features_mean = graphs.sum(dim=1) / graphs_mask.sum(dim=1, keepdim=True)
+        graph_features_mean = graph_features_mean.to(device)
+        graph_features_mean = graph_features_mean.expand(k, graph_feature_dim)
 
         # Tensor to store top k previous words at each step; now they're just <start>
         k_prev_words = torch.tensor([[word_map['<start>']]] * k, dtype=torch.long).to(device)  # (k, 1)
@@ -94,10 +102,11 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir):
         while True:
 
             embeddings = decoder.embedding(k_prev_words).squeeze(1)  # (s, embed_dim)
-            h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, embeddings], dim=1),
+            h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, graph_features_mean, embeddings], dim=1),
                                                 (h1, c1))  # (batch_size_t, decoder_dim)
-            attention_weighted_encoding = decoder.attention(image_features, h1)
-            h2, c2 = decoder.language_model(torch.cat([attention_weighted_encoding, h1], dim=1), (h2, c2))
+            graph_weighted_enc = decoder.cascade1_attention(graphs, h1, mask=graphs_mask)
+            img_weighted_enc = decoder.cascade2_attention(image_features, torch.cat([h1, graph_weighted_enc], dim=1))
+            h2, c2 = decoder.language_model(torch.cat([graph_weighted_enc, img_weighted_enc, h1], dim=1), (h2, c2))
             scores = decoder.fc(h2)  # (s, vocab_size)
             scores = F.log_softmax(scores, dim=1)
 
@@ -138,6 +147,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir):
             h2 = h2[prev_word_inds[incomplete_inds]]
             c2 = c2[prev_word_inds[incomplete_inds]]
             image_features_mean = image_features_mean[prev_word_inds[incomplete_inds]]
+            graph_features_mean = graph_features_mean[prev_word_inds[incomplete_inds]]
             top_k_scores = top_k_scores[incomplete_inds].unsqueeze(1)
             k_prev_words = next_word_inds[incomplete_inds].unsqueeze(1)
 
@@ -191,8 +201,11 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_file', type=str, required=True, help="Checkpoint to use for beam search.")
     parser.add_argument('--beam_size', type=int, default=5,
             help="Beam size to use with beam search. If set to one we run greedy search.")
+    parser.add_argument('--graph_feature_dim', type=int, default=512,
+                        help="depends on which scene graph generator is used")
     args = parser.parse_args()
     cudnn.benchmark = True  # True only if inputs to model are fixed size, otherwise lot of computational overhead
 
-    metrics_dict = beam_evaluate(args.data_name, args.checkpoint_file, args.data_folder, args.beam_size, args.outdir)
+    metrics_dict = beam_evaluate(args.data_name, args.checkpoint_file, args.data_folder, args.beam_size, args.outdir,
+                                 graph_feature_dim=args.graph_feature_dim)
     print(metrics_dict)

@@ -39,6 +39,7 @@ def main():
         decoder = Decoder(attention_dim=args.attention_dim,
                           embed_dim=args.emb_dim,
                           decoder_dim=args.decoder_dim,
+                          graph_features_dim=args.graph_features_dim,
                           vocab_size=len(word_map),
                           dropout=args.dropout)
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
@@ -120,7 +121,8 @@ def main():
     # if needed, run an beamsearch evaluation on the test set
     if args.test_at_end:
         checkpoint_file = 'BEST_' + str(best_epoch) + '_' + 'checkpoint_' + args.data_name + '.pth.tar'
-        results = beam_evaluate(args.data_name, checkpoint_file, args.data_folder, args.beam_size, args.outdir)
+        results = beam_evaluate(args.data_name, checkpoint_file, args.data_folder, args.beam_size, args.outdir,
+                                args.graph_features_dim)
         tracking['test'] = results
     with open(os.path.join(args.outdir, 'TRACKING.'+args.data_name+'.pkl'), 'wb') as f:
         pickle.dump(tracking, f)
@@ -150,14 +152,18 @@ def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer,
     for i, sample in enumerate(train_loader):
         data_time.update(time.time() - start)
 
-        (imgs, caps, caplens) = sample
+        (imgs, obj, rel, obj_mask, rel_mask, caps, caplens) = sample
+        graphs = torch.cat([obj, rel], dim=1)
+        graphs_mask = torch.cat([obj_mask, rel_mask], dim=1)
         # Move to GPU, if available
         imgs = imgs.to(device)
+        graphs = graphs.to(device)
+        graphs_mask = graphs_mask.to(device)
         caps = caps.to(device)
         caplens = caplens.to(device)
 
         # Forward prop.
-        scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
+        scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, graphs, graphs_mask, caps, caplens)
 
         # Max-pooling across predicted words across time steps for discriminative supervision
         scores_d = scores_d.max(1)[0]
@@ -234,7 +240,6 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
     with torch.no_grad():
         # for i, (imgs, caps, caplens,allcaps) in enumerate(val_loader):
         for i, sample in enumerate(val_loader):
-
             if i % 5 != 0:
                 # only decode every 5th caption, starting from idx 0.
                 # this is because the iterator iterates over all captions in the dataset, not all images.
@@ -247,14 +252,18 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
                                                                                     loss=losses, top5=top5accs))
                 continue
 
-            (imgs, caps, caplens, orig_caps) = sample
-            # Move to device, if available
+            (imgs, obj, rel, obj_mask, rel_mask, caps, caplens, orig_caps) = sample
+            graphs = torch.cat([obj, rel], dim=1)
+            graphs_mask = torch.cat([obj_mask, rel_mask], dim=1)
+            # Move to GPU, if available
             imgs = imgs.to(device)
+            graphs = graphs.to(device)
+            graphs_mask = graphs_mask.to(device)
             caps = caps.to(device)
             caplens = caplens.to(device)
 
             # Forward prop.
-            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
+            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, graphs, graphs_mask, caps, caplens)
 
             # Max-pooling across predicted words across time steps for discriminative supervision
             scores_d = scores_d.max(1)[0]
@@ -372,7 +381,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', default=42, type=int, help='The random seed that will be used.')
     parser.add_argument('--emb_dim', default=1024, type=int, help='dimension of word embeddings')
     parser.add_argument('--attention_dim', default=1024, type=int, help='dimension of attention linear layers')
-    parser.add_argument('--decoder_dim', default=1024, type=int, help='dropout probability')
+    parser.add_argument('--decoder_dim', default=1024, type=int, help='dimension of decoder lstm layers')
+    parser.add_argument('--graph_features_dim', default=512, type=int, help='dimension of graph features')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
     parser.add_argument('--epochs', default=50, type=int,
                         help='number of epochs to train for (if early stopping is not triggered)')
@@ -394,7 +404,7 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     args.outdir = os.path.join(args.outdir,
-                               'butd',
+                               'cascade_sg_first',
                                'batch_size-{bs}_epochs-{ep}_dropout-{drop}_patience-{pat}_stop-metric-{met}'.format(
                                    bs=args.batch_size, ep=args.epochs, drop=args.dropout,
                                    pat=args.patience, met=args.stopping_metric),
