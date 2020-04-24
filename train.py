@@ -9,12 +9,12 @@ import torch.utils.data
 import pickle
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence
-from models import BUTDDecoder, IODecoder, TransDecoder
+from models import Decoder
 from datasets import CaptionDataset
 from utils import collate_fn, save_checkpoint, AverageMeter, adjust_learning_rate, accuracy, create_captions_file
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
-from eval import beam_evaluate_butd
+from eval import beam_evaluate
 
 word_map = word_map_inv = None
 scene_graph = False
@@ -36,37 +36,11 @@ def main():
 
     # Initialize / load checkpoint
     if args.checkpoint is None:
-        if args.architecture == 'bottomup_topdown':
-            decoder = BUTDDecoder(attention_dim=args.attention_dim,
-                                  embed_dim=args.emb_dim,
-                                  decoder_dim=args.decoder_dim,
-                                  vocab_size=len(word_map),
-                                  dropout=args.dropout)
-            scene_graph = False
-        elif args.architecture == 'io':
-            decoder = IODecoder(attention_dim=args.attention_dim,
-                                embed_dim=args.emb_dim,
-                                decoder_dim=args.decoder_dim,
-                                vocab_size=len(word_map),
-                                dropout=args.dropout,
-                                use_obj_info=args.use_obj_info,
-                                use_rel_info=args.use_rel_info,
-                                k_update_steps=args.k_update_steps,
-                                update_relations=args.update_relations)
-            scene_graph = True
-        elif args.architecture == 'transformer':
-            decoder = TransDecoder(attention_dim=args.attention_dim,
-                                   embed_dim=args.emb_dim,
-                                   decoder_dim=args.decoder_dim,
-                                   transformer_dim=args.transformer_dim,
-                                   vocab_size=len(word_map),
-                                   dropout=args.dropout,
-                                   n_heads=args.num_heads,
-                                   n_layers=args.num_layers)
-            scene_graph = False
-        else:
-            exit('unknown architecture chosen')
-
+        decoder = Decoder(attention_dim=args.attention_dim,
+                          embed_dim=args.emb_dim,
+                          decoder_dim=args.decoder_dim,
+                          vocab_size=len(word_map),
+                          dropout=args.dropout)
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
         tracking = {'eval': [], 'test': None}
         start_epoch = 0
@@ -92,8 +66,7 @@ def main():
     criterion_dis = nn.MultiLabelMarginLoss().to(device)
 
     # Custom dataloaders
-    train_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, args.data_name, 'TRAIN',
-                                                              scene_graph=scene_graph),
+    train_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, args.data_name, 'TRAIN'),
                                                batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.workers, pin_memory=True)
     val_loader = torch.utils.data.DataLoader(CaptionDataset(args.data_folder, args.data_name, 'VAL',
@@ -147,7 +120,7 @@ def main():
     # if needed, run an beamsearch evaluation on the test set
     if args.test_at_end:
         checkpoint_file = 'BEST_' + str(best_epoch) + '_' + 'checkpoint_' + args.data_name + '.pth.tar'
-        results = beam_evaluate_butd(args.data_name, checkpoint_file, args.data_folder, args.beam_size, args.outdir)
+        results = beam_evaluate(args.data_name, checkpoint_file, args.data_folder, args.beam_size, args.outdir)
         tracking['test'] = results
     with open(os.path.join(args.outdir, 'TRACKING.'+args.data_name+'.pkl'), 'wb') as f:
         pickle.dump(tracking, f)
@@ -175,32 +148,16 @@ def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer,
 
     # Batches
     for i, sample in enumerate(train_loader):
-        if scene_graph:
-            (obj, rel, caps, caplens, obj_mask, rel_mask, pair_idx) = sample
-            obj = obj.to(device)
-            rel = rel.to(device)
-            obj_mask = obj_mask.to(device)
-            rel_mask = rel_mask.to(device)
-            pair_idx = pair_idx.to(device)
-        else:
-            (imgs, caps, caplens) = sample
-            imgs = imgs.to(device)
         data_time.update(time.time() - start)
 
+        (imgs, caps, caplens) = sample
+        imgs = imgs.to(device)
         # Move to GPU, if available
         caps = caps.to(device)
         caplens = caplens.to(device)
+
         # Forward prop.
-        if scene_graph:
-                scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(object_features=obj,
-                                                                                  relation_features=rel,
-                                                                                  encoded_captions=caps,
-                                                                                  caption_lengths=caplens,
-                                                                                  object_mask=obj_mask,
-                                                                                  relation_mask=rel_mask,
-                                                                                  rel_pair_idx=pair_idx)
-        else:
-            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
+        scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
 
         # Max-pooling across predicted words across time steps for discriminative supervision
         scores_d = scores_d.max(1)[0]
@@ -217,9 +174,6 @@ def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer,
         # pack_padded_sequence is an easy trick to do this
         scores = pack_padded_sequence(scores, decode_lengths, batch_first=True, enforce_sorted=True).data
         targets = pack_padded_sequence(targets, decode_lengths, batch_first=True, enforce_sorted=True).data
-        #scores, _ = pack_padded_sequence(scores, decode_lengths, batch_first=True)
-        #targets, _ = pack_padded_sequence(targets, decode_lengths, batch_first=True)
-
         # Calculate loss
         loss_d = criterion_dis(scores_d, targets_d.long())
         loss_g = criterion_ce(scores, targets)
@@ -292,32 +246,15 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
                                                                                     loss=losses, top5=top5accs))
                 continue
 
-            if scene_graph:
-                (obj, rel, caps, caplens, orig_caps, obj_mask, rel_mask, pair_idx) = sample
-                obj = obj.to(device)
-                rel = rel.to(device)
-                obj_mask = obj_mask.to(device)
-                rel_mask = rel_mask.to(device)
-                pair_idx = pair_idx.to(device)
-            else:
-                (imgs, caps, caplens, orig_caps) = sample
-                imgs = imgs.to(device)
+            (imgs, caps, caplens, orig_caps) = sample
+            imgs = imgs.to(device)
 
             # Move to device, if available
             caps = caps.to(device)
             caplens = caplens.to(device)
 
             # Forward prop.
-            if scene_graph:
-                scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(object_features=obj,
-                                                                                  relation_features=rel,
-                                                                                  encoded_captions=caps,
-                                                                                  caption_lengths=caplens,
-                                                                                  object_mask=obj_mask,
-                                                                                  relation_mask=rel_mask,
-                                                                                  rel_pair_idx=pair_idx)
-            else:
-                scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
+            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, caps, caplens)
 
             # Max-pooling across predicted words across time steps for discriminative supervision
             scores_d = scores_d.max(1)[0]
@@ -391,8 +328,6 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
             assert len(references) == len(hypotheses)
 
     # Calculate BLEU-4 scores
-    # bleu4 = corpus_bleu(references, hypotheses)
-    # bleu4 = round(bleu4, 4)
     # compute the metrics
     hypotheses_file = os.path.join(args.outdir, 'hypotheses', 'Epoch{:0>3d}.Hypotheses.json'.format(epoch))
     references_file = os.path.join(args.outdir, 'references', 'Epoch{:0>3d}.References.json'.format(epoch))
@@ -443,24 +378,12 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
     parser.add_argument('--epochs', default=50, type=int,
                         help='number of epochs to train for (if early stopping is not triggered)')
-    parser.add_argument('--architecture', default='bottomup_topdown', type=str,
-                        choices=['bottomup_topdown', 'io', 'transformer'],
-                        help='which architecture to use')
     parser.add_argument('--patience', default=20, type=int,
                         help='stop training when metric doesnt improve for this many epochs')
     parser.add_argument('--stopping_metric', default='Bleu_4', type=str, choices=metrics,
                         help='which metric to use for early stopping')
     parser.add_argument('--test_at_end', default=True, type=bool, help='If there should be tested on the test split')
     parser.add_argument('--beam_size', default=5, type=int, help='If test at end, beam size to use for testing.')
-    # SETTINGS FOR IO DECODER MODEL
-    parser.add_argument('--use_rel_info', default=True, type=bool, help='sue incoming rel info. For IO')
-    parser.add_argument('--use_obj_info', default=True, type=bool, help='use incoming obj info. For IO')
-    parser.add_argument('--k_update_steps', default=1, type=int, help='How many update steps to do. For IO')
-    parser.add_argument('--update_relations', default=False, type=int, help='When more then 1 step, update the rels. For IO')
-    # TRANSFORMER DECODER SETTINGS
-    parser.add_argument('--num_heads', default=4, type=int, help='number of transformer multi-attention heads.')
-    parser.add_argument('--num_layers', default=1, type=int, help='number of transformer layers.')
-    parser.add_argument('--transformer_dim', default=1024, type=int, help='transformer layer dimensions.')
 
     # Parse the arguments
     args = parser.parse_args()
@@ -472,23 +395,13 @@ if __name__ == '__main__':
     #torch.backends.cudnn.benchmark = False
     torch.manual_seed(args.seed)
 
-    # Training parameters
-    if args.architecture == 'io':
-        arch_specifics_dir = 'relinfo-{rel}_objinfo-{obj}_ksteps-{k}_updaterel-{up}'.format(
-            rel=args.use_rel_info, obj=args.use_obj_info, k=args.k_update_steps, up=args.update_relations)
-    elif args.architecture == 'transformer':
-        arch_specifics_dir = 'layers-{l}_heads-{h}_dim-{d}'.format(
-            l=args.num_layers, h=args.num_heads, d=args.transformer_dim)
-    else:
-        arch_specifics_dir = ''
     args.outdir = os.path.join(args.outdir,
-                               args.architecture,
+                               'butd',
                                'batch_size-{bs}_epochs-{ep}_dropout-{drop}_patience-{pat}_stop-metric-{met}'.format(
                                    bs=args.batch_size, ep=args.epochs, drop=args.dropout,
                                    pat=args.patience, met=args.stopping_metric),
                                'emb-{emb}_att-{att}_dec-{dec}'.format(emb=args.emb_dim, att=args.attention_dim,
                                                                       dec=args.decoder_dim),
-                               arch_specifics_dir,
                                'seed-{}'.format(args.seed))
     if os.path.exists(args.outdir) and args.checkpoint is None:
         answer = input("\n\t!! WARNING !! \nthe specified --outdir already exists, "
