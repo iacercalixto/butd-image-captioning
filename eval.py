@@ -104,8 +104,9 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
             embeddings = decoder.embedding(k_prev_words).squeeze(1)  # (s, embed_dim)
             h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, graph_features_mean, embeddings], dim=1),
                                                 (h1, c1))  # (batch_size_t, decoder_dim)
-            graph_weighted_enc = decoder.cascade1_attention(graphs, h1, mask=graphs_mask)
-            img_weighted_enc = decoder.cascade2_attention(image_features, torch.cat([h1, graph_weighted_enc], dim=1))
+            img_weighted_enc = decoder.cascade1_attention(image_features, h1)
+            graph_weighted_enc = decoder.cascade2_attention(graphs, torch.cat([h1, img_weighted_enc], dim=1),
+                                                         mask=graphs_mask)
             h2, c2 = decoder.language_model(torch.cat([graph_weighted_enc, img_weighted_enc, h1], dim=1), (h2, c2))
             scores = decoder.fc(h2)  # (s, vocab_size)
             scores = F.log_softmax(scores, dim=1)
