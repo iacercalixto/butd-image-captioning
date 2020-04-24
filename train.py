@@ -9,7 +9,7 @@ import torch.utils.data
 import pickle
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence
-from models import BUTDDecoder, IODecoder
+from models import BUTDDecoder, IODecoder, TransDecoder
 from datasets import CaptionDataset
 from utils import collate_fn, save_checkpoint, AverageMeter, adjust_learning_rate, accuracy, create_captions_file
 from pycocotools.coco import COCO
@@ -42,6 +42,7 @@ def main():
                                   decoder_dim=args.decoder_dim,
                                   vocab_size=len(word_map),
                                   dropout=args.dropout)
+            scene_graph = False
         elif args.architecture == 'io':
             decoder = IODecoder(attention_dim=args.attention_dim,
                                 embed_dim=args.emb_dim,
@@ -53,6 +54,16 @@ def main():
                                 k_update_steps=args.k_update_steps,
                                 update_relations=args.update_relations)
             scene_graph = True
+        elif args.architecture == 'transformer':
+            decoder = TransDecoder(attention_dim=args.attention_dim,
+                                   embed_dim=args.emb_dim,
+                                   decoder_dim=args.decoder_dim,
+                                   transformer_dim=args.transformer_dim,
+                                   vocab_size=len(word_map),
+                                   dropout=args.dropout,
+                                   n_heads=args.num_heads,
+                                   n_layers=args.num_layers)
+            scene_graph = False
         else:
             exit('unknown architecture chosen')
 
@@ -97,7 +108,7 @@ def main():
     for epoch in range(start_epoch, args.epochs):
 
         # Decay learning rate if there is no improvement for 8 consecutive epochs, and terminate training after 20
-        if epochs_since_improvement == 20:
+        if epochs_since_improvement == args.patience:
             break
         if epochs_since_improvement > 0 and epochs_since_improvement % 8 == 0:
             adjust_learning_rate(decoder_optimizer, 0.8)
@@ -433,8 +444,10 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=50, type=int,
                         help='number of epochs to train for (if early stopping is not triggered)')
     parser.add_argument('--architecture', default='bottomup_topdown', type=str,
-                        choices=['bottomup_topdown', 'io'],
+                        choices=['bottomup_topdown', 'io', 'transformer'],
                         help='which architecture to use')
+    parser.add_argument('--patience', default=20, type=int,
+                        help='stop training when metric doesnt improve for this many epochs')
     parser.add_argument('--stopping_metric', default='Bleu_4', type=str, choices=metrics,
                         help='which metric to use for early stopping')
     parser.add_argument('--test_at_end', default=True, type=bool, help='If there should be tested on the test split')
@@ -442,12 +455,12 @@ if __name__ == '__main__':
     # SETTINGS FOR IO DECODER MODEL
     parser.add_argument('--use_rel_info', default=True, type=bool, help='sue incoming rel info. For IO')
     parser.add_argument('--use_obj_info', default=True, type=bool, help='use incoming obj info. For IO')
-    parser.add_argument('--k_update_steps', default=1, type=int, help='How many update steps to do. For IO and Transformer')
+    parser.add_argument('--k_update_steps', default=1, type=int, help='How many update steps to do. For IO')
     parser.add_argument('--update_relations', default=False, type=int, help='When more then 1 step, update the rels. For IO')
     # TRANSFORMER DECODER SETTINGS
-    parser.add_argument('--num_heads', default=6, type=int, help='sue incoming rel info. For Transformer')
-    parser.add_argument('--num_layers', default=4, type=int, help='use incoming obj info. For Transformer')
-    parser.add_argument('--transformer_dim', default=1024, type=int, help='How many update steps to do. For Transformer')
+    parser.add_argument('--num_heads', default=4, type=int, help='number of transformer multi-attention heads.')
+    parser.add_argument('--num_layers', default=1, type=int, help='number of transformer layers.')
+    parser.add_argument('--transformer_dim', default=1024, type=int, help='transformer layer dimensions.')
 
     # Parse the arguments
     args = parser.parse_args()
@@ -461,20 +474,21 @@ if __name__ == '__main__':
 
     # Training parameters
     if args.architecture == 'io':
-        arch_specific_dir = 'relinfo-{rel}_objinfo-{obj}_ksteps-{k}_updaterel-{up}'.format(
+        arch_specifics_dir = 'relinfo-{rel}_objinfo-{obj}_ksteps-{k}_updaterel-{up}'.format(
             rel=args.use_rel_info, obj=args.use_obj_info, k=args.k_update_steps, up=args.update_relations)
     elif args.architecture == 'transformer':
-        arch_specific_dir = 'layers-{l}_heads-{h}_dim-{d}_ksteps-{k}'.format(
-            l=args.num_layers, h=args.num_heads, k=args.k_update_steps, d=args.transformer_dim)
+        arch_specifics_dir = 'layers-{l}_heads-{h}_dim-{d}'.format(
+            l=args.num_layers, h=args.num_heads, d=args.transformer_dim)
     else:
-        arch_specific_dir = ''
+        arch_specifics_dir = ''
     args.outdir = os.path.join(args.outdir,
                                args.architecture,
-                               'batch_size-{bs}_epochs-{ep}_dropout-{drop}'.format(bs=args.batch_size, ep=args.epochs,
-                                                                                   drop=args.dropout),
+                               'batch_size-{bs}_epochs-{ep}_dropout-{drop}_patience-{pat}_stop-metric-{met}'.format(
+                                   bs=args.batch_size, ep=args.epochs, drop=args.dropout,
+                                   pat=args.patience, met=args.stopping_metric),
                                'emb-{emb}_att-{att}_dec-{dec}'.format(emb=args.emb_dim, att=args.attention_dim,
                                                                       dec=args.decoder_dim),
-                               arch_specific_dir,
+                               arch_specifics_dir,
                                'seed-{}'.format(args.seed))
     if os.path.exists(args.outdir) and args.checkpoint is None:
         answer = input("\n\t!! WARNING !! \nthe specified --outdir already exists, "

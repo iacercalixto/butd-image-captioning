@@ -13,14 +13,13 @@ def collate_fn(batch):
     """ Collate function to be used when iterating captioning datasets.
         Only use with batch size == 1.
     """
-    zip_b = zip(*batch)
-    if len(zip_b) == 4:
-        image_features, caps, caplens, orig_caps = zip_b
+    if len(tuple(zip(*batch))) == 4:
+        image_features, caps, caplens, orig_caps = zip(*batch)
         r = (torch.stack(image_features), torch.stack(caps), torch.stack(caplens), orig_caps[0])
     else:
-        (obj, rel, caps, caplens, orig_caps, obj_mask, rel_mask, pair_idx) = zip_b
+        (obj, rel, caps, caplens, orig_caps, obj_mask, rel_mask, pair_idx) = zip(*batch)
         r = (torch.stack(obj), torch.stack(rel), torch.stack(caps), torch.stack(caplens), orig_caps[0],
-             torch.stack(obj_mask), torch.stack(rel_mask), torch.stack(pair_idx))
+             torch.stack(obj_mask), torch.stack(rel_mask), torch.stack([torch.as_tensor(p) for p in pair_idx]))
     return r
 
 
@@ -331,17 +330,19 @@ def create_captions_file(im_ids, sentences_tokens, file):
     with open(file, 'w', encoding='utf-8') as f:
         json.dump(preds, f)
 
-def create_batched_graphs(o, om, r, rm, pairs, test=False):
+
+def create_batched_graphs(o, om, r, rm, pairs, beam_size=1):
     bsz = o.size(0)
     graphs = []
     pairs = pairs.detach().cpu().numpy()
     for b in range(bsz):
-        graph = dgl.DGLGraph()
-        graph.add_nodes(num=om[b].sum())
-        graph.ndata['F_n'] = o[b, om[b]]
-        cpu_mask = rm[b].detach().cpu()
-        graph.add_edges(pairs[b][cpu_mask, 0], pairs[b][cpu_mask, 1])
-        graph.edata['F_e'] = r[b, rm[b]]
-        graphs.append(graph)
+        for k in range(beam_size):
+            graph = dgl.DGLGraph()
+            graph.add_nodes(num=om[b].sum())
+            graph.ndata['F_n'] = o[b, om[b]]
+            cpu_mask = rm[b].detach().cpu()
+            graph.add_edges(pairs[b][cpu_mask, 0], pairs[b][cpu_mask, 1])
+            graph.edata['F_e'] = r[b, rm[b]]
+            graphs.append(graph)
     b_graphs = dgl.batch(graphs)
     return b_graphs
