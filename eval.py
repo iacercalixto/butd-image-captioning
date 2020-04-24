@@ -4,13 +4,12 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 from datasets import CaptionDataset
-from utils import collate_fn, create_captions_file, create_batched_graphs
+from utils import collate_fn, create_captions_file
 import torch.nn.functional as F
 from tqdm import tqdm
 import argparse
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
-import dgl
 
 
 def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir):
