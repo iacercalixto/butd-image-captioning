@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import traceback
 try:
     from lib.config import cfg as sgg_cfg
     from lib.data.transforms import build_transforms
@@ -11,6 +12,7 @@ except ModuleNotFoundError:
 Please run this script with the environment variable PYTHONPATH including the path to `graph-rcnn.pytorch`.
 Example:
 PYTHONPATH="/path/to/graph-rcnn.pytorch" python create_sg_h5.py.""")
+    traceback.print_exc()
     sys.exit(1)
 import h5py
 import pickle
