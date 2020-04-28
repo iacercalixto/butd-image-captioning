@@ -102,11 +102,15 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
         while True:
 
             embeddings = decoder.embedding(k_prev_words).squeeze(1)  # (s, embed_dim)
-            h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, graph_features_mean, embeddings], dim=1),
-                                                (h1, c1))  # (batch_size_t, decoder_dim)
+            h1_img, c1_img = decoder.top_down_attention_image(
+                    torch.cat([h2, image_features_mean, embeddings], dim=1),
+                    (h1, c1))  # (batch_size_t, decoder_dim)
+            h1_sg, c1_sg = decoder.top_down_attention_scene_graph(
+                    torch.cat([h2, graph_features_mean, embeddings], dim=1),
+                    (h1, c1))  # (batch_size_t, decoder_dim)
             graph_weighted_enc = decoder.no_cascade_graph_attention(graphs, h1, mask=graphs_mask)
             img_weighted_enc   = decoder.no_cascade_img_attention(image_features, h1)
-            h2, c2 = decoder.language_model(torch.cat([graph_weighted_enc, img_weighted_enc, h1], dim=1), (h2, c2))
+            h2, c2 = decoder.language_model(torch.cat([graph_weighted_enc, img_weighted_enc, h1_img, h1_sg], dim=1), (h2, c2))
             scores = decoder.fc(h2)  # (s, vocab_size)
             scores = F.log_softmax(scores, dim=1)
 
@@ -142,10 +146,12 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
             if k == 0:
                 break
             seqs = seqs[incomplete_inds]
-            h1 = h1[prev_word_inds[incomplete_inds]]
-            c1 = c1[prev_word_inds[incomplete_inds]]
-            h2 = h2[prev_word_inds[incomplete_inds]]
-            c2 = c2[prev_word_inds[incomplete_inds]]
+            h1_img = h1_img[prev_word_inds[incomplete_inds]]
+            c1_img = c1_img[prev_word_inds[incomplete_inds]]
+            h1_sg  = h1_sg[prev_word_inds[incomplete_inds]]
+            c1_sg  = c1_sg[prev_word_inds[incomplete_inds]]
+            h2     = h2[prev_word_inds[incomplete_inds]]
+            c2     = c2[prev_word_inds[incomplete_inds]]
             image_features_mean = image_features_mean[prev_word_inds[incomplete_inds]]
             graph_features_mean = graph_features_mean[prev_word_inds[incomplete_inds]]
             top_k_scores = top_k_scores[incomplete_inds].unsqueeze(1)

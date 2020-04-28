@@ -60,6 +60,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         self.features_dim = features_dim
+        self.graph_features_dim = graph_features_dim
         self.attention_dim = attention_dim
         self.embed_dim = embed_dim
         self.decoder_dim = decoder_dim
@@ -72,9 +73,11 @@ class Decoder(nn.Module):
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
         self.dropout = nn.Dropout(p=self.dropout)
-        self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + graph_features_dim + decoder_dim,
+        self.top_down_attention_image       = nn.LSTMCell(embed_dim + features_dim + decoder_dim,
                                               decoder_dim, bias=True) # top down attention LSTMCell
-        self.language_model = nn.LSTMCell(features_dim + graph_features_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
+        self.top_down_attention_scene_graph = nn.LSTMCell(embed_dim + graph_features_dim + decoder_dim,
+                                              decoder_dim, bias=True) # top down attention LSTMCell
+        self.language_model = nn.LSTMCell(features_dim + graph_features_dim + decoder_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
         self.fc1 = weight_norm(nn.Linear(decoder_dim, vocab_size))
         self.fc = weight_norm(nn.Linear(decoder_dim, vocab_size))  # linear layer to find scores over vocabulary
         self.init_weights()  # initialize some layers with the uniform distribution
@@ -146,18 +149,30 @@ class Decoder(nn.Module):
         # are then passed to the language model 
         for t in range(max(decode_lengths)):
             batch_size_t = sum([l > t for l in decode_lengths])
-            h1, c1 = self.top_down_attention(torch.cat([h2[:batch_size_t],
-                                                        image_features_mean[:batch_size_t],
-                                                        graph_features_mean[:batch_size_t],
-                                                        embeddings[:batch_size_t, t, :]], dim=1),
-                                             (h1[:batch_size_t], c1[:batch_size_t]))
-            graph_weighted_enc = self.no_cascade_graph_attention(graph_features[:batch_size_t], h1[:batch_size_t],
+            # object features LSTM
+            h1_img, c1_img = self.top_down_attention_image(
+                    torch.cat([h2[:batch_size_t],
+                               image_features_mean[:batch_size_t],
+                               embeddings[:batch_size_t, t, :]], dim=1),
+                    (h1_img[:batch_size_t], c1_img[:batch_size_t]))
+            # scene graph LSTM
+            h1_sg, c1_sg = self.top_down_attention_scene_graph(
+                    torch.cat([h2[:batch_size_t],
+                               graph_features_mean[:batch_size_t],
+                               embeddings[:batch_size_t, t, :]], dim=1),
+                    (h1_sg[:batch_size_t], c1_sg[:batch_size_t]))
+            # scene graph attention
+            graph_weighted_enc = self.no_cascade_graph_attention(graph_features[:batch_size_t], h1_sg[:batch_size_t],
                                                                  mask=graph_mask[:batch_size_t])
-            img_weighted_enc   = self.no_cascade_object_attention(image_features[:batch_size_t], h1[:batch_size_t])
-            preds1 = self.fc1(self.dropout(h1))
-
+            # image features attention
+            img_weighted_enc   = self.no_cascade_object_attention(image_features[:batch_size_t], h1_img[:batch_size_t])
+            preds1 = self.fc1(self.dropout(h1_img))
+            # description generation LSTM
             h2, c2 = self.language_model(
-                torch.cat([graph_weighted_enc[:batch_size_t], img_weighted_enc[:batch_size_t], h1[:batch_size_t]], dim=1),
+                torch.cat([graph_weighted_enc[:batch_size_t], 
+                           img_weighted_enc[:batch_size_t], 
+                           h1_img[:batch_size_t],
+                           h1_sg[:batch_size_t]], dim=1),
                 (h2[:batch_size_t], c2[:batch_size_t]))
             preds = self.fc(self.dropout(h2))  # (batch_size_t, vocab_size)
             predictions[:batch_size_t, t, :] = preds
