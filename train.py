@@ -43,7 +43,8 @@ def main():
                           rgcn_out_dim=args.rgcn_out_dim,
                           graph_features_dim=args.graph_features_dim,
                           vocab_size=len(word_map),
-                          dropout=args.dropout)
+                          dropout=args.dropout,
+                          edge_gating=args.rgcn_edge_gating)
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
         tracking = {'eval': [], 'test': None}
         start_epoch = 0
@@ -390,6 +391,7 @@ if __name__ == '__main__':
     parser.add_argument('--decoder_dim', default=1024, type=int, help='dimension of decoder lstm layers')
     parser.add_argument('--rgcn_h_dim', default=1024, type=int, help='dimension of rgcn hidden layers')
     parser.add_argument('--rgcn_out_dim', default=1024, type=int, help='dimension of rgcn output')
+    parser.add_argument('--rgcn_edge_gating', action='store_true', help='if we want to gate the edges')
     parser.add_argument('--graph_features_dim', default=512, type=int, help='dimension of graph features')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
     parser.add_argument('--epochs', default=50, type=int,

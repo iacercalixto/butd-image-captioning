@@ -50,17 +50,21 @@ class Attention(nn.Module):
 
 class RGCNLayer(nn.Module):
     """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
-    def __init__(self, in_feat, out_feat, bias=None, activation=None, is_input_layer=False):
+    def __init__(self, in_feat, out_feat, bias=None, activation=None, is_input_layer=False, edge_gating=False):
         super(RGCNLayer, self).__init__()
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.bias = bias
         self.activation = activation
         self.is_input_layer = is_input_layer
+        self.edge_gating = edge_gating
         self.num_edge_types = 5  # subj [0], obj[1], subj'[2], obj'[3], self[4]
 
         # weight bases in equation (3)
         self.weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, self.out_feat))
+        if edge_gating:
+            self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat))
+            self.gate_bias = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat))
         # if self.num_bases < self.num_rels:
         #     # linear combination coefficients in equation (3)
         #     self.w_comp = nn.Parameter(torch.Tensor(self.num_rels, self.num_bases))
@@ -95,7 +99,11 @@ class RGCNLayer(nn.Module):
             def message_func(edges):
                 w = weight[edges.data['rel_type']]
                 msg = torch.bmm(edges.src['h'].unsqueeze(1), w).squeeze()
-                # msg = msg * edges.data['norm']
+                if self.edge_gating:
+                    w = self.gate_weight[edges.data['rel_type']]
+                    b = self.gate_bias[edges.data['rel_type']]
+                    edge_score = torch.sigmoid(torch.bmm(edges.src['h'].unsqueeze(1), w).squeeze() + b)
+                    msg = edge_score * msg
                 return {'msg': msg}
 
         def apply_func(nodes):
@@ -162,7 +170,7 @@ class Decoder(nn.Module):
     """
 
     def __init__(self, attention_dim, embed_dim, decoder_dim, rgcn_h_dim, rgcn_out_dim, vocab_size, features_dim=2048,
-                 graph_features_dim=512, dropout=0.5):
+                 graph_features_dim=512, dropout=0.5, edge_gating=False):
         """
         :param attention_dim: size of attention network
         :param embed_dim: embedding size
@@ -180,7 +188,7 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout = dropout
 
-        self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim, num_hidden_layers=1)
+        self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim, num_hidden_layers=1, edge_gating=edge_gating)
 
         # cascade attention network
         self.cascade1_attention = Attention(rgcn_out_dim, decoder_dim, attention_dim)
