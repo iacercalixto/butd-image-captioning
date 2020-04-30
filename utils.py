@@ -17,9 +17,9 @@ def collate_fn(batch):
         image_features, caps, caplens, orig_caps = zip(*batch)
         r = (torch.stack(image_features), torch.stack(caps), torch.stack(caplens), orig_caps[0])
     else:
-        (img, obj, rel, obj_mask, rel_mask, caps, caplens, orig_caps) = zip(*batch)
+        (img, obj, rel, obj_mask, rel_mask, pair_idx, caps, caplens, orig_caps) = zip(*batch)
         r = (torch.stack(img), torch.stack(obj), torch.stack(rel), torch.stack(obj_mask), torch.stack(rel_mask),
-             torch.stack(caps), torch.stack(caplens), orig_caps[0])
+             torch.stack([torch.as_tensor(p) for p in pair_idx]), torch.stack(caps), torch.stack(caplens), orig_caps[0])
     return r
 
 
@@ -336,13 +336,37 @@ def create_batched_graphs(o, om, r, rm, pairs, beam_size=1):
     graphs = []
     pairs = pairs.detach().cpu().numpy()
     for b in range(bsz):
-        for k in range(beam_size):
-            graph = dgl.DGLGraph()
-            graph.add_nodes(num=om[b].sum())
-            graph.ndata['F_n'] = o[b, om[b]]
-            cpu_mask = rm[b].detach().cpu()
-            graph.add_edges(pairs[b][cpu_mask, 0], pairs[b][cpu_mask, 1])
-            graph.edata['F_e'] = r[b, rm[b]]
-            graphs.append(graph)
+        edge_types = []
+        graph = dgl.DGLGraph()
+        num_objects = om[b].sum().cpu().item()
+        num_rels = rm[b].sum().cpu().item()
+        # create the object and the relation nodes
+        graph.add_nodes(num=num_objects)
+        graph.add_nodes(num=num_rels)
+        # assign the feature vectors to all the nodes
+        graph.ndata['x'] = torch.cat([o[b, om[b]], r[b, rm[b]]], dim=0)
+
+        # create all the edges
+        cpu_mask = rm[b].detach().cpu()
+        subject_nodes = pairs[b][cpu_mask, 0]
+        object_nodes = pairs[b][cpu_mask, 1]
+        predicate_nodes = np.arange(num_objects, num_objects + num_rels)
+        #  create subj edges and subj' edges
+        graph.add_edges(subject_nodes, predicate_nodes)
+        graph.add_edges(predicate_nodes, subject_nodes)
+        edge_types += [0] * num_rels  # subj
+        edge_types += [2] * num_rels  # subj'
+        # create obj edges and obj' edges
+        graph.add_edges(predicate_nodes, object_nodes)
+        graph.add_edges(object_nodes, predicate_nodes)
+        edge_types += [1] * num_rels  # obj
+        edge_types += [3] * num_rels  # obj'
+        # create self edges
+        all_nodes = np.arange(num_objects + num_rels)
+        edge_types += [4] * (num_objects+num_rels)  # self
+        graph.add_edges(all_nodes, all_nodes)
+        graph.edata['rel_type'] = torch.tensor(edge_types)
+        # add final graph to the batch
+        graphs.append(graph)
     b_graphs = dgl.batch(graphs)
     return b_graphs

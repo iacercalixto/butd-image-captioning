@@ -39,6 +39,8 @@ def main():
         decoder = Decoder(attention_dim=args.attention_dim,
                           embed_dim=args.emb_dim,
                           decoder_dim=args.decoder_dim,
+                          rgcn_h_dim=args.rgcn_h_dim,
+                          rgcn_out_dim=args.rgcn_out_dim,
                           graph_features_dim=args.graph_features_dim,
                           vocab_size=len(word_map),
                           dropout=args.dropout)
@@ -150,20 +152,22 @@ def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer,
 
     # Batches
     for i, sample in enumerate(train_loader):
+        if i > 100: break
         data_time.update(time.time() - start)
 
-        (imgs, obj, rel, obj_mask, rel_mask, caps, caplens) = sample
-        graphs = torch.cat([obj, rel], dim=1)
-        graphs_mask = torch.cat([obj_mask, rel_mask], dim=1)
+        (imgs, obj, rel, obj_mask, rel_mask, pair_idx, caps, caplens) = sample
         # Move to GPU, if available
         imgs = imgs.to(device)
-        graphs = graphs.to(device)
-        graphs_mask = graphs_mask.to(device)
+        obj = obj.to(device)
+        obj_mask = obj_mask.to(device)
+        rel = rel.to(device)
+        rel_mask = rel_mask.to(device)
         caps = caps.to(device)
         caplens = caplens.to(device)
 
         # Forward prop.
-        scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, graphs, graphs_mask, caps, caplens)
+        scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, obj, rel, obj_mask, rel_mask,
+                                                                          pair_idx, caps, caplens)
 
         # Max-pooling across predicted words across time steps for discriminative supervision
         scores_d = scores_d.max(1)[0]
@@ -240,6 +244,7 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
     with torch.no_grad():
         # for i, (imgs, caps, caplens,allcaps) in enumerate(val_loader):
         for i, sample in enumerate(val_loader):
+            if i > 100: break
             if i % 5 != 0:
                 # only decode every 5th caption, starting from idx 0.
                 # this is because the iterator iterates over all captions in the dataset, not all images.
@@ -252,18 +257,19 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
                                                                                     loss=losses, top5=top5accs))
                 continue
 
-            (imgs, obj, rel, obj_mask, rel_mask, caps, caplens, orig_caps) = sample
-            graphs = torch.cat([obj, rel], dim=1)
-            graphs_mask = torch.cat([obj_mask, rel_mask], dim=1)
+            (imgs, obj, rel, obj_mask, rel_mask, pair_idx, caps, caplens, orig_caps) = sample
             # Move to GPU, if available
             imgs = imgs.to(device)
-            graphs = graphs.to(device)
-            graphs_mask = graphs_mask.to(device)
+            obj = obj.to(device)
+            obj_mask = obj_mask.to(device)
+            rel = rel.to(device)
+            rel_mask = rel_mask.to(device)
             caps = caps.to(device)
             caplens = caplens.to(device)
 
             # Forward prop.
-            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, graphs, graphs_mask, caps, caplens)
+            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, obj, rel, obj_mask, rel_mask,
+                                                                              pair_idx, caps, caplens)
 
             # Max-pooling across predicted words across time steps for discriminative supervision
             scores_d = scores_d.max(1)[0]
@@ -382,6 +388,8 @@ if __name__ == '__main__':
     parser.add_argument('--emb_dim', default=1024, type=int, help='dimension of word embeddings')
     parser.add_argument('--attention_dim', default=1024, type=int, help='dimension of attention linear layers')
     parser.add_argument('--decoder_dim', default=1024, type=int, help='dimension of decoder lstm layers')
+    parser.add_argument('--rgcn_h_dim', default=1024, type=int, help='dimension of rgcn hidden layers')
+    parser.add_argument('--rgcn_out_dim', default=1024, type=int, help='dimension of rgcn output')
     parser.add_argument('--graph_features_dim', default=512, type=int, help='dimension of graph features')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
     parser.add_argument('--epochs', default=50, type=int,
@@ -404,7 +412,7 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     args.outdir = os.path.join(args.outdir,
-                               'cascade_sg_first',
+                               'cascade_sg_first_rgcn',
                                'batch_size-{bs}_epochs-{ep}_dropout-{drop}_patience-{pat}_stop-metric-{met}'.format(
                                    bs=args.batch_size, ep=args.epochs, drop=args.dropout,
                                    pat=args.patience, met=args.stopping_metric),

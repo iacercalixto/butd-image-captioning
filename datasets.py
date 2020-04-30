@@ -29,11 +29,13 @@ class CaptionDataset(Dataset):
         self.train_obj_mask = self.sg_train_h5['object_mask']
         self.train_rel = self.sg_train_h5['relation_features']
         self.train_rel_mask = self.sg_train_h5['relation_mask']
+        self.train_pair_idx = self.sg_train_h5['relation_pair_idx']
         self.sg_val_h5 = h5py.File(data_folder + '/val_scene-graph.hdf5', 'r')
         self.val_obj = self.sg_val_h5['object_features']
         self.val_obj_mask = self.sg_val_h5['object_mask']
         self.val_rel = self.sg_val_h5['relation_features']
         self.val_rel_mask = self.sg_val_h5['relation_mask']
+        self.val_pair_idx = self.sg_val_h5['relation_pair_idx']
 
         with open(os.path.join(data_folder, self.split + '_SCENE_GRAPHS_FEATURES_' + dataset_name + '.json'), 'r') as j:
             self.sgdet = json.load(j)
@@ -82,11 +84,13 @@ class CaptionDataset(Dataset):
             rel = torch.tensor(self.val_rel[sgdet[1]], dtype=torch.float)
             obj_mask = torch.tensor(self.val_obj_mask[sgdet[1]], dtype=torch.bool)
             rel_mask = torch.tensor(self.val_rel_mask[sgdet[1]], dtype=torch.bool)
+            pair_idx = self.val_pair_idx[sgdet[1]]
         else:
             obj = torch.tensor(self.train_obj[sgdet[1]], dtype=torch.float)
             rel = torch.tensor(self.train_rel[sgdet[1]], dtype=torch.float)
             obj_mask = torch.tensor(self.train_obj_mask[sgdet[1]], dtype=torch.bool)
             rel_mask = torch.tensor(self.train_rel_mask[sgdet[1]], dtype=torch.bool)
+            pair_idx = self.train_pair_idx[sgdet[1]]
 
         # Load bottom up image features
         if objdet[0] == "v":
@@ -95,12 +99,12 @@ class CaptionDataset(Dataset):
             img = torch.tensor(self.train_features[objdet[1]], dtype=torch.float)
 
         if self.split is 'TRAIN':
-            return img, obj, rel, obj_mask, rel_mask, caption, caplen
+            return img, obj, rel, obj_mask, rel_mask, pair_idx, caption, caplen
         else:
             # For validation of testing, also return all 'captions_per_image' captions to find BLEU-4 score
             all_captions = self.orig_captions[((i // self.cpi) * self.cpi):
                                               (((i // self.cpi) * self.cpi) + self.cpi)]
-            return img, obj, rel, obj_mask, rel_mask, caption, caplen, all_captions
+            return img, obj, rel, obj_mask, rel_mask, pair_idx, caption, caplen, all_captions
             # For validation of testing, also return all 'captions_per_image' captions to find BLEU-4 score
 
     def __len__(self):

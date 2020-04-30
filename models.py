@@ -1,6 +1,12 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
+from dgl import DGLGraph
+import dgl.function as fn
+from functools import partial
+from utils import create_batched_graphs
+from torch.nn.utils.rnn import pad_sequence
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -42,12 +48,120 @@ class Attention(nn.Module):
         return attention_weighted_encoding
 
 
+class RGCNLayer(nn.Module):
+    """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
+    def __init__(self, in_feat, out_feat, bias=None, activation=None, is_input_layer=False):
+        super(RGCNLayer, self).__init__()
+        self.in_feat = in_feat
+        self.out_feat = out_feat
+        self.bias = bias
+        self.activation = activation
+        self.is_input_layer = is_input_layer
+        self.num_edge_types = 5  # subj [0], obj[1], subj'[2], obj'[3], self[4]
+
+        # weight bases in equation (3)
+        self.weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, self.out_feat))
+        # if self.num_bases < self.num_rels:
+        #     # linear combination coefficients in equation (3)
+        #     self.w_comp = nn.Parameter(torch.Tensor(self.num_rels, self.num_bases))
+
+        # add bias
+        if self.bias:
+            self.bias = nn.Parameter(torch.Tensor(out_feat))
+
+        # init trainable parameters
+        nn.init.xavier_uniform_(self.weight, gain=nn.init.calculate_gain('relu'))
+        # if self.num_bases < self.num_rels:
+        #     nn.init.xavier_uniform_(self.w_comp, gain=nn.init.calculate_gain('relu'))
+        if self.bias:
+            nn.init.xavier_uniform_(self.bias, gain=nn.init.calculate_gain('relu'))
+
+    def forward(self, g):
+        # if self.num_bases < self.num_rels:
+        #     # generate all weights from bases (equation (3))
+        #     weight = self.weight.view(self.in_feat, self.num_bases, self.out_feat)
+        #     weight = torch.matmul(self.w_comp, weight).view(self.num_rels, self.in_feat, self.out_feat)
+        # else:
+        weight = self.weight
+
+        if self.is_input_layer:
+            def message_func(edges):
+                # for input layer, matrix multiply can be converted to be
+                # an embedding lookup using source node id
+                w = weight[edges.data['rel_type']]
+                msg = torch.bmm(edges.src['x'].unsqueeze(1), w).squeeze()
+                return {'msg': msg}
+        else:
+            def message_func(edges):
+                w = weight[edges.data['rel_type']]
+                msg = torch.bmm(edges.src['h'].unsqueeze(1), w).squeeze()
+                # msg = msg * edges.data['norm']
+                return {'msg': msg}
+
+        def apply_func(nodes):
+            h = nodes.data['h']
+            if self.bias:
+                h = h + self.bias
+            if self.activation:
+                h = self.activation(h)
+            return {'h': h}
+
+        g.update_all(message_func, fn.sum(msg='msg', out='h'), apply_func)
+
+
+class RGCNModule(nn.Module):
+    """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
+
+    def __init__(self, in_dim, h_dim, out_dim, num_hidden_layers=1):
+        super(RGCNModule, self).__init__()
+        self.in_dim = in_dim
+        self.h_dim = h_dim
+        self.out_dim = out_dim
+        self.num_hidden_layers = num_hidden_layers
+
+        # create rgcn layers
+        self.build_model()
+
+
+    def build_model(self):
+        self.layers = nn.ModuleList()
+        # input to hidden
+        i2h = self.build_input_layer()
+        self.layers.append(i2h)
+        # hidden to hidden
+        for _ in range(self.num_hidden_layers):
+            h2h = self.build_hidden_layer()
+            self.layers.append(h2h)
+        # hidden to output
+        h2o = self.build_output_layer()
+        self.layers.append(h2o)
+
+    # initialize feature for each node
+    def create_features(self, num_nodes):
+        features = torch.arange(num_nodes)
+        return features
+
+    def build_input_layer(self):
+        return RGCNLayer(self.in_dim, self.h_dim, activation=F.relu, is_input_layer=True)
+
+    def build_hidden_layer(self):
+        return RGCNLayer(self.h_dim, self.h_dim, activation=F.relu)
+
+    def build_output_layer(self):
+        return RGCNLayer(self.h_dim, self.out_dim, activation=partial(F.softmax, dim=1))
+
+    def forward(self, g):
+        for layer in self.layers:
+            layer(g)
+        return g.ndata.pop('h')
+
+
 class Decoder(nn.Module):
     """
     Decoder.
     """
 
-    def __init__(self, attention_dim, embed_dim, decoder_dim, vocab_size, features_dim=2048,
+    def __init__(self, attention_dim, embed_dim, decoder_dim, rgcn_h_dim, rgcn_out_dim, vocab_size, features_dim=2048,
                  graph_features_dim=512, dropout=0.5):
         """
         :param attention_dim: size of attention network
@@ -66,15 +180,17 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout = dropout
 
+        self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim, num_hidden_layers=1)
+
         # cascade attention network
-        self.cascade1_attention = Attention(graph_features_dim, decoder_dim, attention_dim)
-        self.cascade2_attention = Attention(features_dim, decoder_dim + graph_features_dim, attention_dim)
+        self.cascade1_attention = Attention(rgcn_out_dim, decoder_dim, attention_dim)
+        self.cascade2_attention = Attention(features_dim, decoder_dim + rgcn_out_dim, attention_dim)
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
         self.dropout = nn.Dropout(p=self.dropout)
         self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + graph_features_dim + decoder_dim,
-                                              decoder_dim, bias=True) # top down attention LSTMCell
-        self.language_model = nn.LSTMCell(features_dim + graph_features_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
+                                              decoder_dim, bias=True)  # top down attention LSTMCell
+        self.language_model = nn.LSTMCell(features_dim + rgcn_out_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
         self.fc1 = weight_norm(nn.Linear(decoder_dim, vocab_size))
         self.fc = weight_norm(nn.Linear(decoder_dim, vocab_size))  # linear layer to find scores over vocabulary
         self.init_weights()  # initialize some layers with the uniform distribution
@@ -97,7 +213,8 @@ class Decoder(nn.Module):
         c = torch.zeros(batch_size, self.decoder_dim).to(device)
         return h, c
 
-    def forward(self, image_features, graph_features, graph_mask, encoded_captions, caption_lengths):
+    def forward(self, image_features, object_features, relation_features, object_mask, relation_mask, pair_ids,
+                encoded_captions, caption_lengths):
         """
         Forward propagation.
         :param image_features: encoded images, a tensor of dimension (batch_size, enc_image_size, enc_image_size, encoder_dim)
@@ -113,17 +230,30 @@ class Decoder(nn.Module):
 
         # Flatten image
         image_features_mean = image_features.mean(1).to(device)  # (batch_size, num_pixels, encoder_dim)
+        graph_features = torch.cat([object_features, relation_features], dim=1)
+        graph_mask = torch.cat([object_mask, relation_mask], dim=1)
         graph_features_mean = graph_features.sum(dim=1)/graph_mask.sum(dim=1, keepdim=True)
         graph_features_mean = graph_features_mean.to(device)
-
         # Sort input data by decreasing lengths; why? apparent below
         caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
         image_features = image_features[sort_ind]
-        graph_features = graph_features[sort_ind]
+        object_features = object_features[sort_ind]
+        relation_features = relation_features[sort_ind]
+        object_mask = object_mask[sort_ind]
+        relation_mask = relation_mask[sort_ind]
+        pair_ids = pair_ids[sort_ind]
         graph_mask = graph_mask[sort_ind]
         image_features_mean = image_features_mean[sort_ind]
         graph_features_mean = graph_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
+
+        graphs = create_batched_graphs(object_features, object_mask, relation_features, relation_mask, pair_ids)
+        graphs = graphs.to(device)
+
+        graph_features = self.rgcn(graphs)
+        graph_features = torch.split(graph_features, graphs.batch_num_nodes)
+        graph_features = pad_sequence(graph_features, batch_first=True)
+        graph_mask = graph_features.sum(dim=-1) != 0
 
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)
@@ -157,7 +287,6 @@ class Decoder(nn.Module):
                                                        torch.cat([h1[:batch_size_t], graph_weighted_enc[:batch_size_t]],
                                                                  dim=1))
             preds1 = self.fc1(self.dropout(h1))
-
             h2, c2 = self.language_model(
                 torch.cat([graph_weighted_enc[:batch_size_t], img_weighted_enc[:batch_size_t], h1[:batch_size_t]], dim=1),
                 (h2[:batch_size_t], c2[:batch_size_t]))
