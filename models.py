@@ -1,9 +1,6 @@
 import torch
 from torch import nn
-import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
-from dgl.nn.pytorch import GATConv
-from utils import create_batched_graphs
 from torch.nn.utils.rnn import pad_sequence
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -51,8 +48,8 @@ class Decoder(nn.Module):
     Decoder.
     """
 
-    def __init__(self, attention_dim, embed_dim, decoder_dim, gat_h_dim, gat_out_dim, vocab_size, features_dim=2048,
-                 graph_features_dim=512, dropout=0.5, gat_num_heads=1):
+    def __init__(self, attention_dim, embed_dim, decoder_dim, trans_h_dim, trans_n_heads, trans_n_layers, vocab_size, features_dim=2048,
+                 dropout=0.5):
         """
         :param attention_dim: size of attention network
         :param embed_dim: embedding size
@@ -70,17 +67,19 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout = dropout
 
-        self.gat = GATConv(graph_features_dim, gat_out_dim, gat_num_heads, feat_drop=dropout, attn_drop=dropout)
+        trans_layer = nn.TransformerEncoderLayer(d_model=features_dim, n_heads=trans_n_heads,
+                                                 dim_feedforward=trans_h_dim)
+        self.trans = torch.nn.TransformerEncoder(trans_layer, trans_n_layers)
 
         # cascade attention network
-        self.cascade1_attention = Attention(rgcn_out_dim, decoder_dim, attention_dim)
-        self.cascade2_attention = Attention(features_dim, decoder_dim + rgcn_out_dim, attention_dim)
+        self.cascade1_attention = Attention(trans_h_dim, decoder_dim, attention_dim)
+        self.cascade2_attention = Attention(features_dim, decoder_dim + trans_h_dim, attention_dim)
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
         self.dropout = nn.Dropout(p=self.dropout)
-        self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + graph_features_dim + decoder_dim,
+        self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + decoder_dim,
                                               decoder_dim, bias=True)  # top down attention LSTMCell
-        self.language_model = nn.LSTMCell(features_dim + rgcn_out_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
+        self.language_model = nn.LSTMCell(features_dim + trans_h_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
         self.fc1 = weight_norm(nn.Linear(decoder_dim, vocab_size))
         self.fc = weight_norm(nn.Linear(decoder_dim, vocab_size))  # linear layer to find scores over vocabulary
         self.init_weights()  # initialize some layers with the uniform distribution
@@ -103,8 +102,7 @@ class Decoder(nn.Module):
         c = torch.zeros(batch_size, self.decoder_dim).to(device)
         return h, c
 
-    def forward(self, image_features, object_features, relation_features, object_mask, relation_mask, pair_ids,
-                encoded_captions, caption_lengths):
+    def forward(self, image_features, encoded_captions, caption_lengths):
         """
         Forward propagation.
         :param image_features: encoded images, a tensor of dimension (batch_size, enc_image_size, enc_image_size, encoder_dim)
@@ -120,29 +118,13 @@ class Decoder(nn.Module):
 
         # Flatten image
         image_features_mean = image_features.mean(1).to(device)  # (batch_size, num_pixels, encoder_dim)
-        graph_features = torch.cat([object_features, relation_features], dim=1)
-        graph_mask = torch.cat([object_mask, relation_mask], dim=1)
-        graph_features_mean = graph_features.sum(dim=1)/graph_mask.sum(dim=1, keepdim=True)
-        graph_features_mean = graph_features_mean.to(device)
         # Sort input data by decreasing lengths; why? apparent below
         caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
         image_features = image_features[sort_ind]
-        object_features = object_features[sort_ind]
-        relation_features = relation_features[sort_ind]
-        object_mask = object_mask[sort_ind]
-        relation_mask = relation_mask[sort_ind]
-        pair_ids = pair_ids[sort_ind]
         image_features_mean = image_features_mean[sort_ind]
-        graph_features_mean = graph_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
 
-        graphs = create_batched_graphs(object_features, object_mask, relation_features, relation_mask, pair_ids)
-        graphs = graphs.to(device)
-
-        graph_features = self.gat(graphs, graphs.ndata['x'])
-        graph_features = torch.split(graph_features, graphs.batch_num_nodes)
-        graph_features = pad_sequence(graph_features, batch_first=True)
-        graph_mask = graph_features.sum(dim=-1) != 0
+        graph_features = self.trans(image_features)
 
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)
@@ -167,11 +149,9 @@ class Decoder(nn.Module):
             batch_size_t = sum([l > t for l in decode_lengths])
             h1, c1 = self.top_down_attention(torch.cat([h2[:batch_size_t],
                                                         image_features_mean[:batch_size_t],
-                                                        graph_features_mean[:batch_size_t],
                                                         embeddings[:batch_size_t, t, :]], dim=1),
                                              (h1[:batch_size_t], c1[:batch_size_t]))
-            graph_weighted_enc = self.cascade1_attention(graph_features[:batch_size_t], h1[:batch_size_t],
-                                                         mask=graph_mask[:batch_size_t])
+            graph_weighted_enc = self.cascade1_attention(graph_features[:batch_size_t], h1[:batch_size_t])
             img_weighted_enc = self.cascade2_attention(image_features[:batch_size_t],
                                                        torch.cat([h1[:batch_size_t], graph_weighted_enc[:batch_size_t]],
                                                                  dim=1))

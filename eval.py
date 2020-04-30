@@ -60,7 +60,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
     hypotheses = list()
 
     # For each image
-    for caption_idx, (image_features, obj, rel, obj_mask, rel_mask, pair_idx, caps, caplens, orig_caps) in enumerate(
+    for caption_idx, (image_features, caps, caplens, orig_caps) in enumerate(
             tqdm(loader, desc="EVALUATING AT BEAM SIZE " + str(beam_size))):
 
         if caption_idx % 5 != 0:
@@ -68,25 +68,12 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
 
         k = beam_size
 
-        graphs = torch.cat([obj, rel], dim=1)
-        graphs_mask = torch.cat([obj_mask, rel_mask], dim=1)
-
         # Move to GPU device, if available
         image_features = image_features.to(device)  # (1, 36, 2048)
-        obj = obj.to(device)
-        obj_mask = obj_mask.to(device)
-        rel = rel.to(device)
-        rel_mask = rel_mask.to(device)
-        graphs = graphs.to(device)
-        graphs_mask = graphs_mask.to(device)
         image_features_mean = image_features.mean(1)
         image_features_mean = image_features_mean.expand(k, 2048)
-        graph_features_mean = graphs.sum(dim=1) / graphs_mask.sum(dim=1, keepdim=True)
-        graph_features_mean = graph_features_mean.to(device)
-        graph_features_mean = graph_features_mean.expand(k, graph_feature_dim)
 
-        graphs = create_batched_graphs(obj, obj_mask, rel, rel_mask, pair_idx)
-        graphs = decoder.gat(graphs, graphs.ndata['x'])
+        graphs = decoder.gat(image_features)
 
         # Tensor to store top k previous words at each step; now they're just <start>
         k_prev_words = torch.tensor([[word_map['<start>']]] * k, dtype=torch.long).to(device)  # (k, 1)
@@ -110,7 +97,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
         while True:
 
             embeddings = decoder.embedding(k_prev_words).squeeze(1)  # (s, embed_dim)
-            h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, graph_features_mean, embeddings], dim=1),
+            h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, embeddings], dim=1),
                                                 (h1, c1))  # (batch_size_t, decoder_dim)
             graph_weighted_enc = decoder.cascade1_attention(graphs, h1)
             img_weighted_enc = decoder.cascade2_attention(image_features, torch.cat([h1, graph_weighted_enc], dim=1))
@@ -155,7 +142,6 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
             h2 = h2[prev_word_inds[incomplete_inds]]
             c2 = c2[prev_word_inds[incomplete_inds]]
             image_features_mean = image_features_mean[prev_word_inds[incomplete_inds]]
-            graph_features_mean = graph_features_mean[prev_word_inds[incomplete_inds]]
             top_k_scores = top_k_scores[incomplete_inds].unsqueeze(1)
             k_prev_words = next_word_inds[incomplete_inds].unsqueeze(1)
 
