@@ -2,9 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
-from dgl import DGLGraph
-import dgl.function as fn
-from functools import partial
+from dgl.nn.pytorch import GATConv
 from utils import create_batched_graphs
 from torch.nn.utils.rnn import pad_sequence
 
@@ -48,129 +46,13 @@ class Attention(nn.Module):
         return attention_weighted_encoding
 
 
-class RGCNLayer(nn.Module):
-    """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
-    def __init__(self, in_feat, out_feat, bias=None, activation=None, is_input_layer=False, edge_gating=False):
-        super(RGCNLayer, self).__init__()
-        self.in_feat = in_feat
-        self.out_feat = out_feat
-        self.bias = bias
-        self.activation = activation
-        self.is_input_layer = is_input_layer
-        self.edge_gating = edge_gating
-        self.num_edge_types = 5  # subj [0], obj[1], subj'[2], obj'[3], self[4]
-
-        # weight bases in equation (3)
-        self.weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, self.out_feat))
-        if edge_gating:
-            self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat))
-            self.gate_bias = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat))
-        # if self.num_bases < self.num_rels:
-        #     # linear combination coefficients in equation (3)
-        #     self.w_comp = nn.Parameter(torch.Tensor(self.num_rels, self.num_bases))
-
-        # add bias
-        if self.bias:
-            self.bias = nn.Parameter(torch.Tensor(out_feat))
-
-        # init trainable parameters
-        nn.init.xavier_uniform_(self.weight, gain=nn.init.calculate_gain('relu'))
-        # if self.num_bases < self.num_rels:
-        #     nn.init.xavier_uniform_(self.w_comp, gain=nn.init.calculate_gain('relu'))
-        if self.bias:
-            nn.init.xavier_uniform_(self.bias, gain=nn.init.calculate_gain('relu'))
-
-    def forward(self, g):
-        # if self.num_bases < self.num_rels:
-        #     # generate all weights from bases (equation (3))
-        #     weight = self.weight.view(self.in_feat, self.num_bases, self.out_feat)
-        #     weight = torch.matmul(self.w_comp, weight).view(self.num_rels, self.in_feat, self.out_feat)
-        # else:
-        weight = self.weight
-
-        if self.is_input_layer:
-            def message_func(edges):
-                # for input layer, matrix multiply can be converted to be
-                # an embedding lookup using source node id
-                w = weight[edges.data['rel_type']]
-                msg = torch.bmm(edges.src['x'].unsqueeze(1), w).squeeze()
-                return {'msg': msg}
-        else:
-            def message_func(edges):
-                w = weight[edges.data['rel_type']]
-                msg = torch.bmm(edges.src['h'].unsqueeze(1), w).squeeze()
-                if self.edge_gating:
-                    w = self.gate_weight[edges.data['rel_type']]
-                    b = self.gate_bias[edges.data['rel_type']]
-                    edge_score = torch.sigmoid(torch.bmm(edges.src['h'].unsqueeze(1), w).squeeze() + b)
-                    msg = edge_score * msg
-                return {'msg': msg}
-
-        def apply_func(nodes):
-            h = nodes.data['h']
-            if self.bias:
-                h = h + self.bias
-            if self.activation:
-                h = self.activation(h)
-            return {'h': h}
-
-        g.update_all(message_func, fn.sum(msg='msg', out='h'), apply_func)
-
-
-class RGCNModule(nn.Module):
-    """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
-
-    def __init__(self, in_dim, h_dim, out_dim, num_hidden_layers=1):
-        super(RGCNModule, self).__init__()
-        self.in_dim = in_dim
-        self.h_dim = h_dim
-        self.out_dim = out_dim
-        self.num_hidden_layers = num_hidden_layers
-
-        # create rgcn layers
-        self.build_model()
-
-
-    def build_model(self):
-        self.layers = nn.ModuleList()
-        # input to hidden
-        i2h = self.build_input_layer()
-        self.layers.append(i2h)
-        # hidden to hidden
-        for _ in range(self.num_hidden_layers):
-            h2h = self.build_hidden_layer()
-            self.layers.append(h2h)
-        # hidden to output
-        h2o = self.build_output_layer()
-        self.layers.append(h2o)
-
-    # initialize feature for each node
-    def create_features(self, num_nodes):
-        features = torch.arange(num_nodes)
-        return features
-
-    def build_input_layer(self):
-        return RGCNLayer(self.in_dim, self.h_dim, activation=F.relu, is_input_layer=True)
-
-    def build_hidden_layer(self):
-        return RGCNLayer(self.h_dim, self.h_dim, activation=F.relu)
-
-    def build_output_layer(self):
-        return RGCNLayer(self.h_dim, self.out_dim, activation=partial(F.softmax, dim=1))
-
-    def forward(self, g):
-        for layer in self.layers:
-            layer(g)
-        return g.ndata.pop('h')
-
-
 class Decoder(nn.Module):
     """
     Decoder.
     """
 
-    def __init__(self, attention_dim, embed_dim, decoder_dim, rgcn_h_dim, rgcn_out_dim, vocab_size, features_dim=2048,
-                 graph_features_dim=512, dropout=0.5, edge_gating=False):
+    def __init__(self, attention_dim, embed_dim, decoder_dim, gat_h_dim, gat_out_dim, vocab_size, features_dim=2048,
+                 graph_features_dim=512, dropout=0.5, gat_num_heads=1):
         """
         :param attention_dim: size of attention network
         :param embed_dim: embedding size
@@ -188,7 +70,7 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout = dropout
 
-        self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim, num_hidden_layers=1, edge_gating=edge_gating)
+        self.gat = GATConv(graph_features_dim, gat_out_dim, gat_num_heads, feat_drop=dropout, attn_drop=dropout)
 
         # cascade attention network
         self.cascade1_attention = Attention(rgcn_out_dim, decoder_dim, attention_dim)
@@ -250,7 +132,6 @@ class Decoder(nn.Module):
         object_mask = object_mask[sort_ind]
         relation_mask = relation_mask[sort_ind]
         pair_ids = pair_ids[sort_ind]
-        graph_mask = graph_mask[sort_ind]
         image_features_mean = image_features_mean[sort_ind]
         graph_features_mean = graph_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
@@ -258,7 +139,7 @@ class Decoder(nn.Module):
         graphs = create_batched_graphs(object_features, object_mask, relation_features, relation_mask, pair_ids)
         graphs = graphs.to(device)
 
-        graph_features = self.rgcn(graphs)
+        graph_features = self.gat(graphs, graphs.ndata['x'])
         graph_features = torch.split(graph_features, graphs.batch_num_nodes)
         graph_features = pad_sequence(graph_features, batch_first=True)
         graph_mask = graph_features.sum(dim=-1) != 0

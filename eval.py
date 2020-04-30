@@ -86,7 +86,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
         graph_features_mean = graph_features_mean.expand(k, graph_feature_dim)
 
         graphs = create_batched_graphs(obj, obj_mask, rel, rel_mask, pair_idx)
-        graphs = decoder.rgcn(graphs)
+        graphs = decoder.gat(graphs, graphs.ndata['x'])
 
         # Tensor to store top k previous words at each step; now they're just <start>
         k_prev_words = torch.tensor([[word_map['<start>']]] * k, dtype=torch.long).to(device)  # (k, 1)

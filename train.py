@@ -389,9 +389,10 @@ if __name__ == '__main__':
     parser.add_argument('--emb_dim', default=1024, type=int, help='dimension of word embeddings')
     parser.add_argument('--attention_dim', default=1024, type=int, help='dimension of attention linear layers')
     parser.add_argument('--decoder_dim', default=1024, type=int, help='dimension of decoder lstm layers')
-    parser.add_argument('--rgcn_h_dim', default=1024, type=int, help='dimension of rgcn hidden layers')
-    parser.add_argument('--rgcn_out_dim', default=1024, type=int, help='dimension of rgcn output')
-    parser.add_argument('--rgcn_edge_gating', action='store_true', help='if we want to gate the edges')
+    parser.add_argument('--gat_h_dim', default=1024, type=int, help='dimension of rgcn hidden layers')
+    parser.add_argument('--gat_out_dim', default=1024, type=int, help='dimension of rgcn output')
+    parser.add_argument('--gat_multihead_heads', default=1, type=int,
+                        help='number of heads for multi-head attention in GAT layers')
     parser.add_argument('--graph_features_dim', default=512, type=int, help='dimension of graph features')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
     parser.add_argument('--epochs', default=50, type=int,
