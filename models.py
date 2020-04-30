@@ -51,7 +51,7 @@ class Decoder(nn.Module):
     Decoder.
     """
 
-    def __init__(self, attention_dim, embed_dim, decoder_dim, gat_h_dim, gat_out_dim, vocab_size, features_dim=2048,
+    def __init__(self, attention_dim, embed_dim, decoder_dim, gat_out_dim, vocab_size, features_dim=2048,
                  graph_features_dim=512, dropout=0.5, gat_num_heads=1):
         """
         :param attention_dim: size of attention network
@@ -73,14 +73,14 @@ class Decoder(nn.Module):
         self.gat = GATConv(graph_features_dim, gat_out_dim, gat_num_heads, feat_drop=dropout, attn_drop=dropout)
 
         # cascade attention network
-        self.cascade1_attention = Attention(rgcn_out_dim, decoder_dim, attention_dim)
-        self.cascade2_attention = Attention(features_dim, decoder_dim + rgcn_out_dim, attention_dim)
+        self.cascade1_attention = Attention(gat_out_dim, decoder_dim, attention_dim)
+        self.cascade2_attention = Attention(features_dim, decoder_dim + gat_out_dim, attention_dim)
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
         self.dropout = nn.Dropout(p=self.dropout)
         self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + graph_features_dim + decoder_dim,
                                               decoder_dim, bias=True)  # top down attention LSTMCell
-        self.language_model = nn.LSTMCell(features_dim + rgcn_out_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
+        self.language_model = nn.LSTMCell(features_dim + gat_out_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
         self.fc1 = weight_norm(nn.Linear(decoder_dim, vocab_size))
         self.fc = weight_norm(nn.Linear(decoder_dim, vocab_size))  # linear layer to find scores over vocabulary
         self.init_weights()  # initialize some layers with the uniform distribution

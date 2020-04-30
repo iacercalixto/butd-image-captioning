@@ -39,12 +39,10 @@ def main():
         decoder = Decoder(attention_dim=args.attention_dim,
                           embed_dim=args.emb_dim,
                           decoder_dim=args.decoder_dim,
-                          rgcn_h_dim=args.rgcn_h_dim,
-                          rgcn_out_dim=args.rgcn_out_dim,
-                          graph_features_dim=args.graph_features_dim,
+                          gat_out_dim=args.gat_out_dim,
+                          gat_num_heads=args.gat_n_heads,
                           vocab_size=len(word_map),
-                          dropout=args.dropout,
-                          edge_gating=args.rgcn_edge_gating)
+                          dropout=args.dropout)
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
         tracking = {'eval': [], 'test': None}
         start_epoch = 0
@@ -389,9 +387,8 @@ if __name__ == '__main__':
     parser.add_argument('--emb_dim', default=1024, type=int, help='dimension of word embeddings')
     parser.add_argument('--attention_dim', default=1024, type=int, help='dimension of attention linear layers')
     parser.add_argument('--decoder_dim', default=1024, type=int, help='dimension of decoder lstm layers')
-    parser.add_argument('--gat_h_dim', default=1024, type=int, help='dimension of rgcn hidden layers')
     parser.add_argument('--gat_out_dim', default=1024, type=int, help='dimension of rgcn output')
-    parser.add_argument('--gat_multihead_heads', default=1, type=int,
+    parser.add_argument('--gat_n_heads', default=1, type=int,
                         help='number of heads for multi-head attention in GAT layers')
     parser.add_argument('--graph_features_dim', default=512, type=int, help='dimension of graph features')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
@@ -415,7 +412,7 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     args.outdir = os.path.join(args.outdir,
-                               'cascade_sg_first_rgcn',
+                               'cascade_sg_first_gat',
                                'batch_size-{bs}_epochs-{ep}_dropout-{drop}_patience-{pat}_stop-metric-{met}'.format(
                                    bs=args.batch_size, ep=args.epochs, drop=args.dropout,
                                    pat=args.patience, met=args.stopping_metric),
