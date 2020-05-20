@@ -161,6 +161,12 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
 
             # Break if things have been going on too long
             if step > 50:
+                if len(complete_seqs) == 0:
+                    # if we have to terminate, but none of the sequences are complete,
+                    # recreate the complete inds without removing the incomplete ones: so everything.
+                    complete_inds = list(set(range(len(next_word_inds))))
+                    complete_seqs.extend(seqs[complete_inds].tolist())
+                    complete_seqs_scores.extend(top_k_scores[complete_inds])
                 break
             step += 1
 
