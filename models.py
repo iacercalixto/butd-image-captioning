@@ -89,22 +89,19 @@ class RGCNLayer(nn.Module):
         weight = self.weight
 
         if self.is_input_layer:
-            def message_func(edges):
-                # for input layer, matrix multiply can be converted to be
-                # an embedding lookup using source node id
-                w = weight[edges.data['rel_type']]
-                msg = torch.bmm(edges.src['x'].unsqueeze(1), w).squeeze()
-                return {'msg': msg}
+            feature_name = 'x'
         else:
-            def message_func(edges):
-                w = weight[edges.data['rel_type']]
-                msg = torch.bmm(edges.src['h'].unsqueeze(1), w).squeeze()
-                if self.edge_gating:
-                    w = self.gate_weight[edges.data['rel_type']]
-                    b = self.gate_bias[edges.data['rel_type']]
-                    edge_score = torch.sigmoid(torch.bmm(edges.src['h'].unsqueeze(1), w).squeeze() + b)
-                    msg = edge_score * msg
-                return {'msg': msg}
+            feature_name = 'h'
+        edge_gating = self.edge_gating
+        def message_func(edges):
+            w = weight[edges.data['rel_type']]
+            msg = torch.bmm(edges.src[feature_name].unsqueeze(1), w).squeeze()
+            if edge_gating:
+                w = self.gate_weight[edges.data['rel_type']]
+                b = self.gate_bias[edges.data['rel_type']]
+                edge_score = torch.sigmoid(torch.bmm(edges.src[feature_name].unsqueeze(1), w).squeeze() + b)
+                msg = edge_score * msg
+            return {'msg': msg}
 
         def apply_func(nodes):
             h = nodes.data['h']
@@ -120,43 +117,37 @@ class RGCNLayer(nn.Module):
 class RGCNModule(nn.Module):
     """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
 
-    def __init__(self, in_dim, h_dim, out_dim, num_hidden_layers=1):
+    def __init__(self, in_dim, h_dim, out_dim, num_layers=1, edge_gating=False):
         super(RGCNModule, self).__init__()
         self.in_dim = in_dim
         self.h_dim = h_dim
         self.out_dim = out_dim
-        self.num_hidden_layers = num_hidden_layers
-
+        self.num_layers = num_layers
+        self.edge_gating = edge_gating
         # create rgcn layers
         self.build_model()
 
-
     def build_model(self):
         self.layers = nn.ModuleList()
-        # input to hidden
-        i2h = self.build_input_layer()
-        self.layers.append(i2h)
-        # hidden to hidden
-        for _ in range(self.num_hidden_layers):
-            h2h = self.build_hidden_layer()
-            self.layers.append(h2h)
-        # hidden to output
-        h2o = self.build_output_layer()
-        self.layers.append(h2o)
+        for l in range(self.num_layers):
+            activation = F.relu
+            is_input_layer = False
+            if l == 0:
+                in_dim = self.in_dim
+                is_input_layer = True
+            else:
+                in_dim = self.h_dim
+            if l == self.num_layers-1:
+                out_dim = self.out_dim
+                activation = partial(F.softmax, dim=1)
+            else:
+                out_dim = self.h_dim
+            self.layers.append(RGCNLayer(in_dim, out_dim, activation=activation, is_input_layer=is_input_layer))
 
     # initialize feature for each node
     def create_features(self, num_nodes):
         features = torch.arange(num_nodes)
         return features
-
-    def build_input_layer(self):
-        return RGCNLayer(self.in_dim, self.h_dim, activation=F.relu, is_input_layer=True)
-
-    def build_hidden_layer(self):
-        return RGCNLayer(self.h_dim, self.h_dim, activation=F.relu)
-
-    def build_output_layer(self):
-        return RGCNLayer(self.h_dim, self.out_dim, activation=partial(F.softmax, dim=1))
 
     def forward(self, g):
         for layer in self.layers:
@@ -188,7 +179,7 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout = dropout
 
-        self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim, num_hidden_layers=1, edge_gating=edge_gating)
+        self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim, num_layers=1, edge_gating=edge_gating)
 
         # cascade attention network
         self.cascade1_attention = Attention(rgcn_out_dim, decoder_dim, attention_dim)
@@ -196,7 +187,7 @@ class Decoder(nn.Module):
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
         self.dropout = nn.Dropout(p=self.dropout)
-        self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + graph_features_dim + decoder_dim,
+        self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + rgcn_out_dim + decoder_dim,
                                               decoder_dim, bias=True)  # top down attention LSTMCell
         self.language_model = nn.LSTMCell(features_dim + rgcn_out_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
         self.fc1 = weight_norm(nn.Linear(decoder_dim, vocab_size))
@@ -238,10 +229,6 @@ class Decoder(nn.Module):
 
         # Flatten image
         image_features_mean = image_features.mean(1).to(device)  # (batch_size, num_pixels, encoder_dim)
-        graph_features = torch.cat([object_features, relation_features], dim=1)
-        graph_mask = torch.cat([object_mask, relation_mask], dim=1)
-        graph_features_mean = graph_features.sum(dim=1)/graph_mask.sum(dim=1, keepdim=True)
-        graph_features_mean = graph_features_mean.to(device)
         # Sort input data by decreasing lengths; why? apparent below
         caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
         image_features = image_features[sort_ind]
@@ -250,9 +237,7 @@ class Decoder(nn.Module):
         object_mask = object_mask[sort_ind]
         relation_mask = relation_mask[sort_ind]
         pair_ids = pair_ids[sort_ind]
-        graph_mask = graph_mask[sort_ind]
         image_features_mean = image_features_mean[sort_ind]
-        graph_features_mean = graph_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
 
         graphs = create_batched_graphs(object_features, object_mask, relation_features, relation_mask, pair_ids)
@@ -262,6 +247,9 @@ class Decoder(nn.Module):
         graph_features = torch.split(graph_features, graphs.batch_num_nodes)
         graph_features = pad_sequence(graph_features, batch_first=True)
         graph_mask = graph_features.sum(dim=-1) != 0
+
+        graph_features_mean = graph_features.sum(dim=1) / graph_mask.sum(dim=1, keepdim=True)
+        graph_features_mean = graph_features_mean.to(device)
 
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)
