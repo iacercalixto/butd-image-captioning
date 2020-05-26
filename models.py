@@ -67,7 +67,7 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout = dropout
 
-        trans_layer = nn.TransformerEncoderLayer(d_model=features_dim, nheads=trans_n_heads,
+        trans_layer = nn.TransformerEncoderLayer(d_model=features_dim, nhead=trans_n_heads,
                                                  dim_feedforward=trans_h_dim)
         self.trans = torch.nn.TransformerEncoder(trans_layer, trans_n_layers)
 

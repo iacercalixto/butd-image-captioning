@@ -410,6 +410,8 @@ if __name__ == '__main__':
                                    pat=args.patience, met=args.stopping_metric),
                                'emb-{emb}_att-{att}_dec-{dec}'.format(emb=args.emb_dim, att=args.attention_dim,
                                                                       dec=args.decoder_dim),
+                               'transformer_heads-{head}_dim-{dim}_layers-{l}_'.format(
+                                   head=args.trans_n_heads, dim=args.trans_h_dim, l=args.trans_n_layers),
                                'seed-{}'.format(args.seed))
     if os.path.exists(args.outdir) and args.checkpoint is None:
         answer = input("\n\t!! WARNING !! \nthe specified --outdir already exists, "
