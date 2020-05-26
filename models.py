@@ -63,8 +63,8 @@ class RGCNLayer(nn.Module):
         # weight bases in equation (3)
         self.weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, self.out_feat))
         if edge_gating:
-            self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, 1))
-            self.gate_bias = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, 1))
+            self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat))
+            self.gate_bias = nn.Parameter(torch.Tensor(self.num_edge_types, 1))
         # if self.num_bases < self.num_rels:
         #     # linear combination coefficients in equation (3)
         #     self.w_comp = nn.Parameter(torch.Tensor(self.num_rels, self.num_bases))
