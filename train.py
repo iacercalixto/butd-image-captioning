@@ -379,7 +379,7 @@ if __name__ == '__main__':
     parser.add_argument('--attention_dim', default=1024, type=int, help='dimension of attention linear layers')
     parser.add_argument('--decoder_dim', default=1024, type=int, help='dimension of decoder lstm layers')
     parser.add_argument('--trans_h_dim', default=2048, type=int, help='dimension of rgcn hidden layers')
-    parser.add_argument('--trans_n_heads', default=6, type=int, help='dimension of rgcn output')
+    parser.add_argument('--trans_n_heads', default=8, type=int, help='dimension of rgcn output')
     parser.add_argument('--trans_n_layers', default=2, type=int,
                         help='number of heads for multi-head attention in GAT layers')
     parser.add_argument('--graph_features_dim', default=512, type=int, help='dimension of graph features')
