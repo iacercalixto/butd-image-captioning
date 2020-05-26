@@ -44,7 +44,8 @@ def main():
                           graph_features_dim=args.graph_features_dim,
                           vocab_size=len(word_map),
                           dropout=args.dropout,
-                          edge_gating=args.rgcn_edge_gating)
+                          edge_gating=args.rgcn_edge_gating,
+                          rgcn_layers=args.rgcn_layers)
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
         tracking = {'eval': [], 'test': None}
         start_epoch = 0
@@ -104,7 +105,7 @@ def main():
                                   criterion_ce=criterion_ce,
                                   criterion_dis=criterion_dis,
                                   epoch=epoch)
-        tracking['eval'] = recent_results
+        tracking['eval'].append(recent_results)
         recent_stopping_score = recent_results[args.stopping_metric]
 
         # Check if there was an improvement
@@ -391,6 +392,7 @@ if __name__ == '__main__':
     parser.add_argument('--decoder_dim', default=1024, type=int, help='dimension of decoder lstm layers')
     parser.add_argument('--rgcn_h_dim', default=1024, type=int, help='dimension of rgcn hidden layers')
     parser.add_argument('--rgcn_out_dim', default=1024, type=int, help='dimension of rgcn output')
+    parser.add_argument('--rgcn_layers', default=1, type=int, help='number of rgcn layers')
     parser.add_argument('--rgcn_edge_gating', action='store_true', help='if we want to gate the edges')
     parser.add_argument('--graph_features_dim', default=512, type=int, help='dimension of graph features')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
@@ -420,6 +422,8 @@ if __name__ == '__main__':
                                    pat=args.patience, met=args.stopping_metric),
                                'emb-{emb}_att-{att}_dec-{dec}'.format(emb=args.emb_dim, att=args.attention_dim,
                                                                       dec=args.decoder_dim),
+                               'rgcn_hdim-{h}_outdim-{o}_layers-{l}_gating-{g}'.format(
+                                   h=args.rgcn_h_dim, o=args.rgcn_out_dim, l=args.rgcn_layers, g=args.rgcn_edge_gating),
                                'seed-{}'.format(args.seed))
     if os.path.exists(args.outdir) and args.checkpoint is None:
         answer = input("\n\t!! WARNING !! \nthe specified --outdir already exists, "

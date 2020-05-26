@@ -63,8 +63,8 @@ class RGCNLayer(nn.Module):
         # weight bases in equation (3)
         self.weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, self.out_feat))
         if edge_gating:
-            self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat))
-            self.gate_bias = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat))
+            self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, 1))
+            self.gate_bias = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, 1))
         # if self.num_bases < self.num_rels:
         #     # linear combination coefficients in equation (3)
         #     self.w_comp = nn.Parameter(torch.Tensor(self.num_rels, self.num_bases))
@@ -161,7 +161,7 @@ class Decoder(nn.Module):
     """
 
     def __init__(self, attention_dim, embed_dim, decoder_dim, rgcn_h_dim, rgcn_out_dim, vocab_size, features_dim=2048,
-                 graph_features_dim=512, dropout=0.5, edge_gating=False):
+                 graph_features_dim=512, dropout=0.5, edge_gating=False, rgcn_layers=1):
         """
         :param attention_dim: size of attention network
         :param embed_dim: embedding size
@@ -179,7 +179,8 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout = dropout
 
-        self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim, num_layers=1, edge_gating=edge_gating)
+        self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim,
+                               num_layers=rgcn_layers, edge_gating=edge_gating)
 
         # cascade attention network
         self.cascade1_attention = Attention(rgcn_out_dim, decoder_dim, attention_dim)
