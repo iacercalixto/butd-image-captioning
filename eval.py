@@ -73,7 +73,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
         image_features_mean = image_features.mean(1)
         image_features_mean = image_features_mean.expand(k, 2048)
 
-        graphs = decoder.gat(image_features)
+        graphs = decoder.trans(image_features)
 
         # Tensor to store top k previous words at each step; now they're just <start>
         k_prev_words = torch.tensor([[word_map['<start>']]] * k, dtype=torch.long).to(device)  # (k, 1)
@@ -147,6 +147,12 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
 
             # Break if things have been going on too long
             if step > 50:
+                if len(complete_seqs) == 0:
+                    # if we have to terminate, but none of the sequences are complete,
+                    # recreate the complete inds without removing the incomplete ones: so everything.
+                    complete_inds = list(set(range(len(next_word_inds))))
+                    complete_seqs.extend(seqs[complete_inds].tolist())
+                    complete_seqs_scores.extend(top_k_scores[complete_inds])
                 break
             step += 1
 
