@@ -146,7 +146,8 @@ class RGCNModule(nn.Module):
                 activation = partial(F.softmax, dim=1)
             else:
                 out_dim = self.h_dim
-            self.layers.append(RGCNLayer(in_dim, out_dim, activation=activation, is_input_layer=is_input_layer))
+            self.layers.append(RGCNLayer(in_dim, out_dim, activation=activation, is_input_layer=is_input_layer,
+                                         edge_gating=self.edge_gating))
 
     # initialize feature for each node
     def create_features(self, num_nodes):
