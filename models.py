@@ -96,6 +96,7 @@ class RGCNLayer(nn.Module):
         def message_func(edges):
             w = weight[edges.data['rel_type']]
             msg = torch.bmm(edges.src[feature_name].unsqueeze(1), w).squeeze()
+            print(msg.shape)
             if edge_gating:
                 w = self.gate_weight[edges.data['rel_type']]
                 b = self.gate_bias[edges.data['rel_type']]
