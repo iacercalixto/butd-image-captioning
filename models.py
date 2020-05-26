@@ -100,9 +100,9 @@ class RGCNLayer(nn.Module):
             if edge_gating:
                 w = self.gate_weight[edges.data['rel_type']]
                 b = self.gate_bias[edges.data['rel_type']]
-                print(edges.src[feature_name].unsqueeze(1).shape, w.shape, b.shape)
-                print(torch.bmm(edges.src[feature_name].unsqueeze(1), w).squeeze())
-                edge_score = torch.sigmoid(torch.bmm(edges.src[feature_name].unsqueeze(1), w).squeeze() + b)
+                print(edges.src[feature_name].shape, w.shape, b.shape)
+                print(torch.bmm(edges.src[feature_name], w).squeeze())
+                edge_score = torch.sigmoid(torch.bmm(edges.src[feature_name], w).squeeze() + b)
                 print(msg.shape, edge_score.shape)
                 msg = edge_score * msg
             return {'msg': msg}
