@@ -236,7 +236,7 @@ class Decoder(nn.Module):
         image_features_mean = image_features_mean[sort_ind]
         graph_features_mean = graph_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
-        print(torch.isnan(graph_features_mean).any())
+
         # initialize the graphs
         g = create_batched_graphs(object_features, object_mask, relation_features, relation_mask, pair_ids)
 
@@ -275,13 +275,12 @@ class Decoder(nn.Module):
             of = object_features[:batch_size_t]
             om = object_mask[:batch_size_t]
             cgat_obj = torch.zeros_like(of)  # size of number of objects
-            cgat_obj[:, :cgat_out.size(1)] = cgat_out  # fill with output of io attention
+            cgat_obj[:, :cgat_out.size(1)] = cgat_out  # fill with output of cgat
             cgat_mask = torch.zeros_like(om)  # mask shaped like original objects
-            cgat_mask[:, :cgat_mask_out.size(1)] = cgat_mask_out  # copy over mask from io attention
+            cgat_mask[:, :cgat_mask_out.size(1)] = cgat_mask_out  # copy over mask from cgat
             cgat_obj[~cgat_mask & om] = of[~cgat_mask & om]  # fill the no in_degree nodes with the original state
             # we pass the object mask. We used the cgat_mask only to determine which io's where filled and which not.
-            graph_weighted_enc = self.cascade1_attention(cgat_obj[:batch_size_t], h1[:batch_size_t],
-                                                         mask=cgat_mask[:batch_size_t])
+            graph_weighted_enc = self.cascade1_attention(cgat_obj[:batch_size_t], h1[:batch_size_t], mask=om)
             img_weighted_enc = self.cascade2_attention(image_features[:batch_size_t],
                                                        torch.cat([h1[:batch_size_t], graph_weighted_enc[:batch_size_t]],
                                                                  dim=1))
