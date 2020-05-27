@@ -29,11 +29,14 @@ class CaptionDataset(Dataset):
         self.train_obj_mask = self.sg_train_h5['object_mask']
         self.train_rel = self.sg_train_h5['relation_features']
         self.train_rel_mask = self.sg_train_h5['relation_mask']
+        self.train_pair_idx = self.sg_train_h5['relation_pair_idx']
         self.sg_val_h5 = h5py.File(data_folder + '/val_scene-graph.hdf5', 'r')
         self.val_obj = self.sg_val_h5['object_features']
         self.val_obj_mask = self.sg_val_h5['object_mask']
         self.val_rel = self.sg_val_h5['relation_features']
         self.val_rel_mask = self.sg_val_h5['relation_mask']
+        self.val_pair_idx = self.sg_val_h5['relation_pair_idx']
+
 
         with open(os.path.join(data_folder, self.split + '_SCENE_GRAPHS_FEATURES_' + dataset_name + '.json'), 'r') as j:
             self.sgdet = json.load(j)
