@@ -236,7 +236,7 @@ class Decoder(nn.Module):
         image_features_mean = image_features_mean[sort_ind]
         graph_features_mean = graph_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
-
+        print(torch.isnan(graph_features_mean).any())
         # initialize the graphs
         g = create_batched_graphs(object_features, object_mask, relation_features, relation_mask, pair_ids)
 
@@ -282,7 +282,6 @@ class Decoder(nn.Module):
             # we pass the object mask. We used the cgat_mask only to determine which io's where filled and which not.
             graph_weighted_enc = self.cascade1_attention(cgat_obj[:batch_size_t], h1[:batch_size_t],
                                                          mask=cgat_mask[:batch_size_t])
-            print(torch.isnan(graph_weighted_enc).any())
             img_weighted_enc = self.cascade2_attention(image_features[:batch_size_t],
                                                        torch.cat([h1[:batch_size_t], graph_weighted_enc[:batch_size_t]],
                                                                  dim=1))
