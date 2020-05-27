@@ -82,11 +82,13 @@ class CaptionDataset(Dataset):
             rel = torch.tensor(self.val_rel[sgdet[1]], dtype=torch.float)
             obj_mask = torch.tensor(self.val_obj_mask[sgdet[1]], dtype=torch.bool)
             rel_mask = torch.tensor(self.val_rel_mask[sgdet[1]], dtype=torch.bool)
+            pair_idx = self.val_pair_idx[sgdet[1]]
         else:
             obj = torch.tensor(self.train_obj[sgdet[1]], dtype=torch.float)
             rel = torch.tensor(self.train_rel[sgdet[1]], dtype=torch.float)
             obj_mask = torch.tensor(self.train_obj_mask[sgdet[1]], dtype=torch.bool)
             rel_mask = torch.tensor(self.train_rel_mask[sgdet[1]], dtype=torch.bool)
+            pair_idx = self.train_pair_idx[sgdet[1]]
 
         # Load bottom up image features
         if objdet[0] == "v":
@@ -95,12 +97,12 @@ class CaptionDataset(Dataset):
             img = torch.tensor(self.train_features[objdet[1]], dtype=torch.float)
 
         if self.split is 'TRAIN':
-            return img, obj, rel, obj_mask, rel_mask, caption, caplen
+            return img, obj, rel, obj_mask, rel_mask, pair_idx, caption, caplen
         else:
             # For validation of testing, also return all 'captions_per_image' captions to find BLEU-4 score
             all_captions = self.orig_captions[((i // self.cpi) * self.cpi):
                                               (((i // self.cpi) * self.cpi) + self.cpi)]
-            return img, obj, rel, obj_mask, rel_mask, caption, caplen, all_captions
+            return img, obj, rel, obj_mask, rel_mask, pair_idx, caption, caplen, all_captions
             # For validation of testing, also return all 'captions_per_image' captions to find BLEU-4 score
 
     def __len__(self):
