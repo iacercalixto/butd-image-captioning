@@ -1,8 +1,11 @@
 import torch
 from torch import nn
 from torch.nn.utils.weight_norm import weight_norm
-
+from torch.nn.utils.rnn import pad_sequence
+import dgl
+from utils import create_batched_graphs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 class Attention(nn.Module):
     """
@@ -42,13 +45,114 @@ class Attention(nn.Module):
         return attention_weighted_encoding
 
 
+class ContextGAT(nn.Module):
+    """
+    IO Attention layer, addapted from GAT, very similar to regular attention
+    """
+
+    def __init__(self, context_dim, feature_dim, use_obj_info=True, use_rel_info=True, k_update_steps=1,
+                 update_relations=False):
+        super(ContextGAT, self).__init__()
+        self.context_dim = context_dim
+        self.feature_dim = feature_dim
+        self.use_obj_info = use_obj_info
+        self.use_rel_info = use_rel_info
+        self.k_update_steps = k_update_steps
+        self.update_relations = update_relations
+        assert self.use_obj_info or self.use_rel_info, "Either cfg.MODEL.IO.USE_NEIGHBOURHOOD_RELATIONS or " \
+                                                       "cfg.MODEL.IO.USE_NEIGHBOURHOOD_RELATIONS must be set to true."
+        self.input_proj = nn.Linear(context_dim, feature_dim, bias=False)
+        # we always compute the object score, because of the self node
+        self.object_score = nn.Linear(feature_dim * 2, 1, bias=False)
+        # only have to compute relation score when needed
+        if self.use_rel_info or self.update_relations:
+            self.relation_score = nn.Linear(feature_dim * 2, 1, bias=False)
+        if self.update_relations:
+            self.linear_phi_edge = nn.Linear(feature_dim * 2, feature_dim, bias=False)
+        self.linear_phi_node = nn.Linear(feature_dim * 2, feature_dim, bias=False)
+        self.relu = nn.ReLU()
+
+    def io_attention_send(self, edges):
+        # dict for storing messages to the nodes
+        mail = dict()
+
+        if self.use_rel_info or self.update_relations:
+            s_e = self.relation_score(torch.cat([edges.data['h_t'], edges.data['F_e_t']], dim=-1))
+            F_e = edges.data['F_e_t']
+            if self.use_rel_info:
+                mail['F_e'] = F_e
+                mail['s_e'] = s_e
+        if self.use_obj_info or self.update_relations:
+            # Here edge.src is the data dict from the neighbour nodes
+            s_n = edges.src['s_n']
+            F_n = edges.src['F_n_t']
+            if self.use_obj_info:
+                mail['F_n'] = F_n
+                mail['s_n'] = s_n
+        if self.update_relations:
+            # create and compute F_i and s_i, here edges.dst is the destination node or node_self/node_i
+            F_i = edges.dst['F_n_t']
+            s_i = edges.dst['s_n']
+            s = torch.stack([s_n, s_i], dim=1)
+            F = torch.stack([F_n, F_i], dim=1)
+            alpha_edge = torch.softmax(s, dim=1)
+            applied_alpha = torch.sum(alpha_edge*F, dim=1)
+            F_e_tplus1 = self.relu(self.linear_phi_edge(torch.cat([applied_alpha, F_e], dim=-1)))
+            edges.data['F_e_tplus1'] = F_e_tplus1
+        return mail
+
+    def io_attention_reduce(self, nodes):
+        # This is executed per node
+        s_ne = torch.cat([nodes.mailbox['s_n'], nodes.mailbox['s_e']], dim=-2)
+        F_ne = torch.cat([nodes.mailbox['F_n'], nodes.mailbox['F_e']], dim=-2)
+        F_i = nodes.data['F_n_t']
+        alpha_ne = torch.softmax(s_ne, dim=-2)
+        applied_alpha = torch.sum(alpha_ne * F_ne, dim=-2)
+        F_i_tplus1 = self.relu(self.linear_phi_node(torch.cat([applied_alpha, F_i], dim=-1)))
+        return {'F_i_tplus1': F_i_tplus1}
+
+    def forward(self, input_hidden, graphs: dgl.DGLGraph, batch_num_nodes=None):
+        if batch_num_nodes is None:
+            b_num_nodes = graphs.batch_num_nodes
+        else:
+            b_num_nodes = batch_num_nodes
+        h_t = self.input_proj(input_hidden)
+        # when there are no edges in the graph, there is nothing to do
+        if graphs.number_of_edges() > 0:
+            #give all the nodes an edges information about the current querry hidden state
+            broadcasted_hn = dgl.broadcast_nodes(graphs, h_t)
+            graphs.ndata['h_t'] = broadcasted_hn
+            broadcasted_he = dgl.broadcast_edges(graphs, h_t)
+            graphs.edata['h_t'] = broadcasted_he
+            # create a copy of the node and edge states which will be updated for K iterations
+            graphs.ndata['F_n_t'] = graphs.ndata['F_n']
+            graphs.edata['F_e_t'] = graphs.edata['F_e']
+
+            for _ in range(self.k_update_steps):
+                graphs.ndata['s_n'] = self.object_score(torch.cat([graphs.ndata['h_t'], graphs.ndata['F_n_t']], dim=-1))
+                graphs.send(message_func=self.io_attention_send)
+                graphs.recv(reduce_func=self.io_attention_reduce)
+                graphs.ndata['F_n_t'] = graphs.ndata['F_i_tplus1']
+                if self.update_relations:
+                    graphs.edata['F_e_t'] = graphs.edata['F_e_tplus1']
+
+            io = torch.split(graphs.ndata['F_n_t'], split_size_or_sections=b_num_nodes)
+        else:
+            io = torch.split(graphs.ndata['F_n'], split_size_or_sections=b_num_nodes)
+        io = pad_sequence(io, batch_first=True)
+        io_mask = io.sum(dim=-1) != 0
+
+        return io, io_mask
+
+
 class Decoder(nn.Module):
     """
     Decoder.
     """
 
     def __init__(self, attention_dim, embed_dim, decoder_dim, vocab_size, features_dim=2048,
-                 graph_features_dim=512, dropout=0.5):
+                 graph_features_dim=512, dropout=0.5, cgat_obj_info=True, cgat_rel_info=True,
+                 cgat_k_steps=1, cgat_update_rel=True):
         """
         :param attention_dim: size of attention network
         :param embed_dim: embedding size
@@ -67,6 +171,9 @@ class Decoder(nn.Module):
         self.dropout = dropout
 
         # cascade attention network
+        self.context_gat = ContextGAT(context_dim=decoder_dim, feature_dim=graph_features_dim,
+                                      use_obj_info=cgat_obj_info, use_rel_info=cgat_rel_info,
+                                      k_update_steps=cgat_k_steps, update_relations=cgat_update_rel)
         self.cascade1_attention = Attention(graph_features_dim, decoder_dim, attention_dim)
         self.cascade2_attention = Attention(features_dim, decoder_dim + graph_features_dim, attention_dim)
 
@@ -97,7 +204,8 @@ class Decoder(nn.Module):
         c = torch.zeros(batch_size, self.decoder_dim).to(device)
         return h, c
 
-    def forward(self, image_features, graph_features, graph_mask, encoded_captions, caption_lengths):
+    def forward(self, image_features, object_features, relation_features, object_mask, relation_mask, pair_ids,
+                encoded_captions, caption_lengths):
         """
         Forward propagation.
         :param image_features: encoded images, a tensor of dimension (batch_size, enc_image_size, enc_image_size, encoder_dim)
@@ -113,17 +221,24 @@ class Decoder(nn.Module):
 
         # Flatten image
         image_features_mean = image_features.mean(1).to(device)  # (batch_size, num_pixels, encoder_dim)
-        graph_features_mean = graph_features.sum(dim=1)/graph_mask.sum(dim=1, keepdim=True)
+        graph_features_mean = torch.cat([object_features, relation_features], dim=1).sum(dim=1)/ \
+                              torch.cat([object_mask, relation_mask], dim=1).sum(dim=1, keepdim=True)
         graph_features_mean = graph_features_mean.to(device)
 
         # Sort input data by decreasing lengths; why? apparent below
         caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
         image_features = image_features[sort_ind]
-        graph_features = graph_features[sort_ind]
-        graph_mask = graph_mask[sort_ind]
+        object_features = object_features[sort_ind]
+        object_mask = object_mask[sort_ind]
+        relation_features = relation_features[sort_ind]
+        relation_mask = relation_mask[sort_ind]
+        pair_ids = pair_ids[sort_ind]
         image_features_mean = image_features_mean[sort_ind]
         graph_features_mean = graph_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
+
+        # initialize the graphs
+        g = create_batched_graphs(object_features, object_mask, relation_features, relation_mask, pair_ids)
 
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)
@@ -146,13 +261,28 @@ class Decoder(nn.Module):
         # are then passed to the language model 
         for t in range(max(decode_lengths)):
             batch_size_t = sum([l > t for l in decode_lengths])
+            sub_g = g.subgraph(range(sum(g.batch_num_nodes[:batch_size_t])))
+            sub_g.ndata['F_n'] = g.ndata['F_n'][sub_g.parent_nid]
+            sub_g.edata['F_e'] = g.edata['F_e'][sub_g.parent_eid]
             h1, c1 = self.top_down_attention(torch.cat([h2[:batch_size_t],
                                                         image_features_mean[:batch_size_t],
                                                         graph_features_mean[:batch_size_t],
                                                         embeddings[:batch_size_t, t, :]], dim=1),
                                              (h1[:batch_size_t], c1[:batch_size_t]))
-            graph_weighted_enc = self.cascade1_attention(graph_features[:batch_size_t], h1[:batch_size_t],
-                                                         mask=graph_mask[:batch_size_t])
+            cgat_out, cgat_mask_out = self.context_gat(h1[:batch_size_t], sub_g,
+                                                       batch_num_nodes=g.batch_num_nodes[:batch_size_t])
+            # make sure the size doesn't decrease
+            of = object_features[:batch_size_t]
+            om = object_mask[:batch_size_t]
+            cgat_obj = torch.zeros_like(of)  # size of number of objects
+            cgat_obj[:, :cgat_out.size(1)] = cgat_out  # fill with output of io attention
+            cgat_mask = torch.zeros_like(om)  # mask shaped like original objects
+            cgat_mask[:, :cgat_mask_out.size(1)] = cgat_mask_out  # copy over mask from io attention
+            cgat_obj[~cgat_mask & om] = of[~cgat_mask & om]  # fill the no in_degree nodes with the original state
+            # we pass the object mask. We used the cgat_mask only to determine which io's where filled and which not.
+            attention_weighted_encoding = self.attention(cgat_obj, h1[:batch_size_t], mask=om)
+            graph_weighted_enc = self.cascade1_attention(cgat_obj[:batch_size_t], h1[:batch_size_t],
+                                                         mask=cgat_mask[:batch_size_t])
             img_weighted_enc = self.cascade2_attention(image_features[:batch_size_t],
                                                        torch.cat([h1[:batch_size_t], graph_weighted_enc[:batch_size_t]],
                                                                  dim=1))

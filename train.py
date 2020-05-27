@@ -41,7 +41,12 @@ def main():
                           decoder_dim=args.decoder_dim,
                           graph_features_dim=args.graph_features_dim,
                           vocab_size=len(word_map),
-                          dropout=args.dropout)
+                          dropout=args.dropout,
+                          cgat_obj_info=args.cgat_obj_info,
+                          cgat_rel_info=args.cgat_rel_info,
+                          cgat_k_steps=args.cgat_k_steps,
+                          cgat_update_rel=args.cgat_update_rel
+                          )
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
         tracking = {'eval': [], 'test': None}
         start_epoch = 0
@@ -101,7 +106,7 @@ def main():
                                   criterion_ce=criterion_ce,
                                   criterion_dis=criterion_dis,
                                   epoch=epoch)
-        tracking['eval'] = recent_results
+        tracking['eval'].append(recent_results)
         recent_stopping_score = recent_results[args.stopping_metric]
 
         # Check if there was an improvement
@@ -152,19 +157,19 @@ def train(train_loader, decoder, criterion_ce, criterion_dis, decoder_optimizer,
     for i, sample in enumerate(train_loader):
         data_time.update(time.time() - start)
 
-        (imgs, obj, rel, obj_mask, rel_mask, caps, caplens) = sample
-        graphs = torch.cat([obj, rel], dim=1)
-        graphs_mask = torch.cat([obj_mask, rel_mask], dim=1)
+        (imgs, obj, rel, obj_mask, rel_mask, pair_idx, caps, caplens) = sample
         # Move to GPU, if available
         imgs = imgs.to(device)
-        graphs = graphs.to(device)
-        graphs_mask = graphs_mask.to(device)
+        obj = obj.to(device)
+        obj_mask = obj_mask.to(device)
+        rel = rel.to(device)
+        rel_mask = rel_mask.to(device)
         caps = caps.to(device)
         caplens = caplens.to(device)
 
         # Forward prop.
-        scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, graphs, graphs_mask, caps, caplens)
-
+        scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, obj, rel, obj_mask, rel_mask,
+                                                                          pair_idx, caps, caplens)
         # Max-pooling across predicted words across time steps for discriminative supervision
         scores_d = scores_d.max(1)[0]
 
@@ -252,18 +257,19 @@ def validate(val_loader, decoder, criterion_ce, criterion_dis, epoch):
                                                                                     loss=losses, top5=top5accs))
                 continue
 
-            (imgs, obj, rel, obj_mask, rel_mask, caps, caplens, orig_caps) = sample
-            graphs = torch.cat([obj, rel], dim=1)
-            graphs_mask = torch.cat([obj_mask, rel_mask], dim=1)
+            (imgs, obj, rel, obj_mask, rel_mask, pair_idx, caps, caplens, orig_caps) = sample
             # Move to GPU, if available
             imgs = imgs.to(device)
-            graphs = graphs.to(device)
-            graphs_mask = graphs_mask.to(device)
+            obj = obj.to(device)
+            obj_mask = obj_mask.to(device)
+            rel = rel.to(device)
+            rel_mask = rel_mask.to(device)
             caps = caps.to(device)
             caplens = caplens.to(device)
 
             # Forward prop.
-            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, graphs, graphs_mask, caps, caplens)
+            scores, scores_d, caps_sorted, decode_lengths, sort_ind = decoder(imgs, obj, rel, obj_mask, rel_mask,
+                                                                              pair_idx, caps, caplens)
 
             # Max-pooling across predicted words across time steps for discriminative supervision
             scores_d = scores_d.max(1)[0]
@@ -383,6 +389,11 @@ if __name__ == '__main__':
     parser.add_argument('--attention_dim', default=1024, type=int, help='dimension of attention linear layers')
     parser.add_argument('--decoder_dim', default=1024, type=int, help='dimension of decoder lstm layers')
     parser.add_argument('--graph_features_dim', default=512, type=int, help='dimension of graph features')
+    parser.add_argument('--cgat_obj_info', default=True, type=bool, help='whether to use object info in CGAT')
+    parser.add_argument('--cgat_rel_info', default=True, type=bool, help='whether to use relation info in CGAT')
+    parser.add_argument('--cgat_k_steps', default=1, type=bool, help='how many CGAT steps to do')
+    parser.add_argument('--cgat_update_rel', default=True, type=bool, help='whether to update relation states '
+                                                                           'for k CGAT steps')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
     parser.add_argument('--epochs', default=50, type=int,
                         help='number of epochs to train for (if early stopping is not triggered)')
@@ -410,6 +421,9 @@ if __name__ == '__main__':
                                    pat=args.patience, met=args.stopping_metric),
                                'emb-{emb}_att-{att}_dec-{dec}'.format(emb=args.emb_dim, att=args.attention_dim,
                                                                       dec=args.decoder_dim),
+                               'cgat_useobj-{o}_userel-{r}_ksteps-{k}_updaterel-{u}'.format(
+                                   o=args.cgat_obj_info, r=args.cgat_rel_info, k=args.cgat_k_steps,
+                                   u=args.cgat_update_rel),
                                'seed-{}'.format(args.seed))
     if os.path.exists(args.outdir) and args.checkpoint is None:
         answer = input("\n\t!! WARNING !! \nthe specified --outdir already exists, "
