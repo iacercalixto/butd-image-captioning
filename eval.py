@@ -164,7 +164,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
             image_features_mean = image_features_mean[prev_word_inds[incomplete_inds]]
             graph_features_mean = graph_features_mean[prev_word_inds[incomplete_inds]]
             gs = dgl.unbatch(g)
-            g = dgl.batch([prev_word_inds[incomplete_inds]])
+            g = dgl.batch(gs[prev_word_inds[incomplete_inds]])
             top_k_scores = top_k_scores[incomplete_inds].unsqueeze(1)
             k_prev_words = next_word_inds[incomplete_inds].unsqueeze(1)
 
