@@ -280,7 +280,6 @@ class Decoder(nn.Module):
             cgat_mask[:, :cgat_mask_out.size(1)] = cgat_mask_out  # copy over mask from io attention
             cgat_obj[~cgat_mask & om] = of[~cgat_mask & om]  # fill the no in_degree nodes with the original state
             # we pass the object mask. We used the cgat_mask only to determine which io's where filled and which not.
-            attention_weighted_encoding = self.attention(cgat_obj, h1[:batch_size_t], mask=om)
             graph_weighted_enc = self.cascade1_attention(cgat_obj[:batch_size_t], h1[:batch_size_t],
                                                          mask=cgat_mask[:batch_size_t])
             img_weighted_enc = self.cascade2_attention(image_features[:batch_size_t],

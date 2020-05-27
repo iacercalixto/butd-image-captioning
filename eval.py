@@ -4,9 +4,10 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 from datasets import CaptionDataset
-from utils import collate_fn, create_captions_file
+from utils import collate_fn, create_captions_file, create_batched_graphs
 import torch.nn.functional as F
 from tqdm import tqdm
+import dgl
 import argparse
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
@@ -59,7 +60,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
     hypotheses = list()
 
     # For each image
-    for caption_idx, (image_features, obj, rel, obj_mask, rel_mask, caps, caplens, orig_caps) in enumerate(
+    for caption_idx, (image_features, obj, rel, obj_mask, rel_mask, pair_ids, caps, caplens, orig_caps) in enumerate(
             tqdm(loader, desc="EVALUATING AT BEAM SIZE " + str(beam_size))):
 
         if caption_idx % 5 != 0:
@@ -67,18 +68,23 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
 
         k = beam_size
 
-        graphs = torch.cat([obj, rel], dim=1)
-        graphs_mask = torch.cat([obj_mask, rel_mask], dim=1)
 
         # Move to GPU device, if available
         image_features = image_features.to(device)  # (1, 36, 2048)
-        graphs = graphs.to(device)
-        graphs_mask = graphs_mask.to(device)
+        obj = obj.to(device)
+        rel = rel.to(device)
+        obj_mask = obj_mask.to(device)
+        rel_mask = rel_mask.to(device)
+        pair_ids = pair_ids.to(device)
         image_features_mean = image_features.mean(1)
         image_features_mean = image_features_mean.expand(k, 2048)
-        graph_features_mean = graphs.sum(dim=1) / graphs_mask.sum(dim=1, keepdim=True)
+        graph_features_mean = torch.cat([obj, rel], dim=1).sum(dim=1) / \
+                              torch.cat([obj_mask, rel_mask], dim=1).sum(dim=1, keepdim=True)
         graph_features_mean = graph_features_mean.to(device)
         graph_features_mean = graph_features_mean.expand(k, graph_feature_dim)
+
+        # initialize the graphs
+        g = create_batched_graphs(obj, obj_mask, rel, rel_mask, pair_ids, beam_size=k)
 
         # Tensor to store top k previous words at each step; now they're just <start>
         k_prev_words = torch.tensor([[word_map['<start>']]] * k, dtype=torch.long).to(device)  # (k, 1)
@@ -100,11 +106,20 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
 
         # s is a number less than or equal to k, because sequences are removed from this process once they hit <end>
         while True:
-
             embeddings = decoder.embedding(k_prev_words).squeeze(1)  # (s, embed_dim)
             h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, graph_features_mean, embeddings], dim=1),
                                                 (h1, c1))  # (batch_size_t, decoder_dim)
-            graph_weighted_enc = decoder.cascade1_attention(graphs, h1, mask=graphs_mask)
+            cgat_out, cgat_mask_out = decoder.context_gat(h1, g, batch_num_nodes=g.batch_num_nodes)
+            # make sure the size doesn't decrease
+            of = obj
+            om = obj_mask
+            cgat_obj = torch.zeros_like(of)  # size of number of objects
+            cgat_obj[:, :cgat_out.size(1)] = cgat_out  # fill with output of io attention
+            cgat_mask = torch.zeros_like(om)  # mask shaped like original objects
+            cgat_mask[:, :cgat_mask_out.size(1)] = cgat_mask_out  # copy over mask from io attention
+            cgat_obj[~cgat_mask & om] = of[~cgat_mask & om]  # fill the no in_degree nodes with the original state
+            # we pass the object mask. We used the cgat_mask only to determine which io's where filled and which not.
+            graph_weighted_enc = decoder.cascade1_attention(cgat_obj, h1, mask=cgat_mask)
             img_weighted_enc = decoder.cascade2_attention(image_features, torch.cat([h1, graph_weighted_enc], dim=1))
             h2, c2 = decoder.language_model(torch.cat([graph_weighted_enc, img_weighted_enc, h1], dim=1), (h2, c2))
             scores = decoder.fc(h2)  # (s, vocab_size)
@@ -148,6 +163,8 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
             c2 = c2[prev_word_inds[incomplete_inds]]
             image_features_mean = image_features_mean[prev_word_inds[incomplete_inds]]
             graph_features_mean = graph_features_mean[prev_word_inds[incomplete_inds]]
+            gs = dgl.unbatch(g)
+            g = dgl.batch([prev_word_inds[incomplete_inds]])
             top_k_scores = top_k_scores[incomplete_inds].unsqueeze(1)
             k_prev_words = next_word_inds[incomplete_inds].unsqueeze(1)
 
