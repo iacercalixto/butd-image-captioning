@@ -185,7 +185,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
     # change to use the image ids in the results object, not those from the ground-truth
     coco_eval.params['image_id'] = coco_results.getImgIds()
     # run the evaluation
-    coco_eval.evaluate(verbose=False, metrics=['bleu', 'meteor', 'rouge', 'cider'])
+    coco_eval.evaluate(verbose=False, metrics=['bleu', 'meteor', 'rouge', 'cider', 'spice'])
     # Results contains: "Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4", "METEOR", "ROUGE_L", "CIDEr", "SPICE"
     results = coco_eval.eval
     return results
