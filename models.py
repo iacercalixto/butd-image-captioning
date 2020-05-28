@@ -47,7 +47,8 @@ class Decoder(nn.Module):
     Decoder.
     """
 
-    def __init__(self, attention_dim, embed_dim, decoder_dim, vocab_size, features_dim=2048, dropout=0.5):
+    def __init__(self, attention_dim, embed_dim, decoder_dim, trans_h_dim, trans_n_heads, trans_n_layers, vocab_size,
+                 features_dim=2048, dropout=0.5):
         """
         :param attention_dim: size of attention network
         :param embed_dim: embedding size
@@ -64,6 +65,10 @@ class Decoder(nn.Module):
         self.decoder_dim = decoder_dim
         self.vocab_size = vocab_size
         self.dropout = dropout
+
+        trans_layer = nn.TransformerEncoderLayer(d_model=features_dim, nhead=trans_n_heads,
+                                                 dim_feedforward=trans_h_dim)
+        self.trans = torch.nn.TransformerEncoder(trans_layer, trans_n_layers)
 
         self.attention = Attention(features_dim, decoder_dim, attention_dim)  # attention network
 
@@ -105,14 +110,14 @@ class Decoder(nn.Module):
         batch_size = image_features.size(0)
         vocab_size = self.vocab_size
 
-        # Flatten image
-        image_features_mean = image_features.mean(1).to(device)  # (batch_size, num_pixels, encoder_dim)
-
         # Sort input data by decreasing lengths; why? apparent below
         caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
         image_features = image_features[sort_ind]
-        image_features_mean = image_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
+
+        image_features = self.trans(image_features)
+        # Flatten image
+        image_features_mean = image_features.mean(1).to(device)  # (batch_size, num_pixels, encoder_dim)
 
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)
@@ -139,7 +144,7 @@ class Decoder(nn.Module):
                                                        image_features_mean[:batch_size_t],
                                                        embeddings[:batch_size_t, t, :]], dim=1),
                                             (h1[:batch_size_t], c1[:batch_size_t]))
-            attention_weighted_encoding = self.attention(image_features[:batch_size_t],h1[:batch_size_t])
+            attention_weighted_encoding = self.attention(image_features[:batch_size_t], h1[:batch_size_t])
             preds1 = self.fc1(self.dropout(h1))
             h2,c2 = self.language_model(
                 torch.cat([attention_weighted_encoding[:batch_size_t],h1[:batch_size_t]], dim=1),

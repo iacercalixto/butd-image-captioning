@@ -39,6 +39,9 @@ def main():
         decoder = Decoder(attention_dim=args.attention_dim,
                           embed_dim=args.emb_dim,
                           decoder_dim=args.decoder_dim,
+                          trans_h_dim=args.trans_h_dim,
+                          trans_n_heads=args.trans_n_heads,
+                          trans_n_layers=args.trans_n_layers,
                           vocab_size=len(word_map),
                           dropout=args.dropout)
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
@@ -373,6 +376,10 @@ if __name__ == '__main__':
     parser.add_argument('--emb_dim', default=1024, type=int, help='dimension of word embeddings')
     parser.add_argument('--attention_dim', default=1024, type=int, help='dimension of attention linear layers')
     parser.add_argument('--decoder_dim', default=1024, type=int, help='dropout probability')
+    parser.add_argument('--trans_h_dim', default=2048, type=int, help='dimension of rgcn hidden layers')
+    parser.add_argument('--trans_n_heads', default=8, type=int, help='dimension of rgcn output')
+    parser.add_argument('--trans_n_layers', default=2, type=int,
+                        help='number of heads for multi-head attention in GAT layers')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
     parser.add_argument('--epochs', default=50, type=int,
                         help='number of epochs to train for (if early stopping is not triggered)')
@@ -394,12 +401,14 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     args.outdir = os.path.join(args.outdir,
-                               'butd',
+                               'butd_transformer',
                                'batch_size-{bs}_epochs-{ep}_dropout-{drop}_patience-{pat}_stop-metric-{met}'.format(
                                    bs=args.batch_size, ep=args.epochs, drop=args.dropout,
                                    pat=args.patience, met=args.stopping_metric),
                                'emb-{emb}_att-{att}_dec-{dec}'.format(emb=args.emb_dim, att=args.attention_dim,
                                                                       dec=args.decoder_dim),
+                               'transformer_heads-{head}_dim-{dim}_layers-{l}_'.format(
+                                   head=args.trans_n_heads, dim=args.trans_h_dim, l=args.trans_n_layers),
                                'seed-{}'.format(args.seed))
     if os.path.exists(args.outdir) and args.checkpoint is None:
         answer = input("\n\t!! WARNING !! \nthe specified --outdir already exists, "

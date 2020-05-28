@@ -69,6 +69,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir):
 
         # Move to GPU device, if available
         image_features = image_features.to(device)  # (1, 36, 2048)
+        image_features = decoder.trans(image_features)
         image_features_mean = image_features.mean(1)
         image_features_mean = image_features_mean.expand(k, 2048)
 
