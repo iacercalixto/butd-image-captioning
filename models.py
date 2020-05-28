@@ -122,8 +122,6 @@ class Decoder(nn.Module):
         image_features_mean = image_features.mean(1).to(device)  # (batch_size, num_pixels, encoder_dim)
         graph_features = torch.cat([object_features, relation_features], dim=1)
         graph_mask = torch.cat([object_mask, relation_mask], dim=1)
-        graph_features_mean = graph_features.sum(dim=1)/graph_mask.sum(dim=1, keepdim=True)
-        graph_features_mean = graph_features_mean.to(device)
         # Sort input data by decreasing lengths; why? apparent below
         caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
         image_features = image_features[sort_ind]
@@ -133,7 +131,6 @@ class Decoder(nn.Module):
         relation_mask = relation_mask[sort_ind]
         pair_ids = pair_ids[sort_ind]
         image_features_mean = image_features_mean[sort_ind]
-        graph_features_mean = graph_features_mean[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
 
         graphs = create_batched_graphs(object_features, object_mask, relation_features, relation_mask, pair_ids)
@@ -143,6 +140,9 @@ class Decoder(nn.Module):
         graph_features = torch.split(graph_features, graphs.batch_num_nodes)
         graph_features = pad_sequence(graph_features, batch_first=True)
         graph_mask = graph_features.sum(dim=-1) != 0
+
+        graph_features_mean = graph_features.sum(dim=1) / graph_mask.sum(dim=1, keepdim=True)
+        graph_features_mean = graph_features_mean.to(device)
 
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)

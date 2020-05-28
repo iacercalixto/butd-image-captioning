@@ -102,7 +102,7 @@ def main():
                                   criterion_ce=criterion_ce,
                                   criterion_dis=criterion_dis,
                                   epoch=epoch)
-        tracking['eval'] = recent_results
+        tracking['eval'].append(recent_results)
         recent_stopping_score = recent_results[args.stopping_metric]
 
         # Check if there was an improvement
@@ -418,6 +418,7 @@ if __name__ == '__main__':
                                    pat=args.patience, met=args.stopping_metric),
                                'emb-{emb}_att-{att}_dec-{dec}'.format(emb=args.emb_dim, att=args.attention_dim,
                                                                       dec=args.decoder_dim),
+                               'gat_outdim-{o}_nheads-{n}'.format(o=args.gat_out_dim, n=args.gat_n_heads),
                                'seed-{}'.format(args.seed))
     if os.path.exists(args.outdir) and args.checkpoint is None:
         answer = input("\n\t!! WARNING !! \nthe specified --outdir already exists, "
