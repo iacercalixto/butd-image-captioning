@@ -391,7 +391,7 @@ if __name__ == '__main__':
     parser.add_argument('--graph_features_dim', default=512, type=int, help='dimension of graph features')
     parser.add_argument('--cgat_obj_info', default=True, type=bool, help='whether to use object info in CGAT')
     parser.add_argument('--cgat_rel_info', default=True, type=bool, help='whether to use relation info in CGAT')
-    parser.add_argument('--cgat_k_steps', default=1, type=bool, help='how many CGAT steps to do')
+    parser.add_argument('--cgat_k_steps', default=1, type=int, help='how many CGAT steps to do')
     parser.add_argument('--cgat_update_rel', default=True, type=bool, help='whether to update relation states '
                                                                            'for k CGAT steps')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
