@@ -67,8 +67,8 @@ class Decoder(nn.Module):
         self.dropout = dropout
 
         # cascade attention network
-        self.cascade1_attention = Attention(graph_features_dim, decoder_dim, attention_dim)
-        self.cascade2_attention = Attention(features_dim, decoder_dim + graph_features_dim, attention_dim)
+        self.no_cascade_graph_attention  = Attention(graph_features_dim, decoder_dim, attention_dim)
+        self.no_cascade_object_attention = Attention(features_dim,       decoder_dim, attention_dim)
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
         self.dropout = nn.Dropout(p=self.dropout)
@@ -151,11 +151,9 @@ class Decoder(nn.Module):
                                                         graph_features_mean[:batch_size_t],
                                                         embeddings[:batch_size_t, t, :]], dim=1),
                                              (h1[:batch_size_t], c1[:batch_size_t]))
-            graph_weighted_enc = self.cascade1_attention(graph_features[:batch_size_t], h1[:batch_size_t],
-                                                         mask=graph_mask[:batch_size_t])
-            img_weighted_enc = self.cascade2_attention(image_features[:batch_size_t],
-                                                       torch.cat([h1[:batch_size_t], graph_weighted_enc[:batch_size_t]],
-                                                                 dim=1))
+            graph_weighted_enc = self.no_cascade_graph_attention(graph_features[:batch_size_t], h1[:batch_size_t],
+                                                                 mask=graph_mask[:batch_size_t])
+            img_weighted_enc   = self.no_cascade_object_attention(image_features[:batch_size_t], h1[:batch_size_t])
             preds1 = self.fc1(self.dropout(h1))
 
             h2, c2 = self.language_model(
