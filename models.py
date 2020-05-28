@@ -171,11 +171,11 @@ class Decoder(nn.Module):
         self.dropout = dropout
 
         # cascade attention network
-        self.context_gat = ContextGAT(context_dim=decoder_dim, feature_dim=graph_features_dim,
+        self.cascade1_attention = Attention(features_dim, decoder_dim, attention_dim)
+        self.context_gat = ContextGAT(context_dim=decoder_dim+features_dim, feature_dim=graph_features_dim,
                                       use_obj_info=cgat_obj_info, use_rel_info=cgat_rel_info,
                                       k_update_steps=cgat_k_steps, update_relations=cgat_update_rel)
-        self.cascade1_attention = Attention(graph_features_dim, decoder_dim, attention_dim)
-        self.cascade2_attention = Attention(features_dim, decoder_dim + graph_features_dim, attention_dim)
+        self.cascade2_attention = Attention(graph_features_dim, decoder_dim + features_dim, attention_dim)
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
         self.dropout = nn.Dropout(p=self.dropout)
@@ -269,7 +269,10 @@ class Decoder(nn.Module):
                                                         graph_features_mean[:batch_size_t],
                                                         embeddings[:batch_size_t, t, :]], dim=1),
                                              (h1[:batch_size_t], c1[:batch_size_t]))
-            cgat_out, cgat_mask_out = self.context_gat(h1[:batch_size_t], sub_g,
+
+            img_weighted_enc = self.cascade1_attention(image_features[:batch_size_t], h1[:batch_size_t])
+            cgat_out, cgat_mask_out = self.context_gat(torch.cat([h1[:batch_size_t], img_weighted_enc[:batch_size_t]],
+                                                                    dim=1), sub_g,
                                                        batch_num_nodes=g.batch_num_nodes[:batch_size_t])
             # make sure the size doesn't decrease
             of = object_features[:batch_size_t]
@@ -280,10 +283,9 @@ class Decoder(nn.Module):
             cgat_mask[:, :cgat_mask_out.size(1)] = cgat_mask_out  # copy over mask from cgat
             cgat_obj[~cgat_mask & om] = of[~cgat_mask & om]  # fill the no in_degree nodes with the original state
             # we pass the object mask. We used the cgat_mask only to determine which io's where filled and which not.
-            graph_weighted_enc = self.cascade1_attention(cgat_obj[:batch_size_t], h1[:batch_size_t], mask=om)
-            img_weighted_enc = self.cascade2_attention(image_features[:batch_size_t],
-                                                       torch.cat([h1[:batch_size_t], graph_weighted_enc[:batch_size_t]],
-                                                                 dim=1))
+            graph_weighted_enc = self.cascade2_attention(cgat_obj[:batch_size_t],
+                                                         torch.cat([h1[:batch_size_t], img_weighted_enc[:batch_size_t]],
+                                                                    dim=1), mask=om)
             preds1 = self.fc1(self.dropout(h1))
 
             h2, c2 = self.language_model(

@@ -109,7 +109,9 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
             embeddings = decoder.embedding(k_prev_words).squeeze(1)  # (s, embed_dim)
             h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, graph_features_mean, embeddings], dim=1),
                                                 (h1, c1))  # (batch_size_t, decoder_dim)
-            cgat_out, cgat_mask_out = decoder.context_gat(h1, g, batch_num_nodes=g.batch_num_nodes)
+            img_weighted_enc = decoder.cascade1_attention(image_features, h1)
+            cgat_out, cgat_mask_out = decoder.context_gat(torch.cat([h1, img_weighted_enc], dim=1), g,
+                                                          batch_num_nodes=g.batch_num_nodes)
             # make sure the size doesn't decrease
             of = obj
             om = obj_mask
@@ -119,8 +121,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
             cgat_mask[:, :cgat_mask_out.size(1)] = cgat_mask_out  # copy over mask from io attention
             cgat_obj[~cgat_mask & om] = of[~cgat_mask & om]  # fill the no in_degree nodes with the original state
             # we pass the object mask. We used the cgat_mask only to determine which io's where filled and which not.
-            graph_weighted_enc = decoder.cascade1_attention(cgat_obj, h1, mask=cgat_mask)
-            img_weighted_enc = decoder.cascade2_attention(image_features, torch.cat([h1, graph_weighted_enc], dim=1))
+            graph_weighted_enc = decoder.cascade2_attention(cgat_obj, torch.cat([h1, img_weighted_enc], dim=1), mask=om)
             h2, c2 = decoder.language_model(torch.cat([graph_weighted_enc, img_weighted_enc, h1], dim=1), (h2, c2))
             scores = decoder.fc(h2)  # (s, vocab_size)
             scores = F.log_softmax(scores, dim=1)
