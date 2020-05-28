@@ -111,11 +111,11 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
                                                 (h1, c1))  # (batch_size_t, decoder_dim)
             cgat_out, cgat_mask_out = decoder.context_gat(h1, g, batch_num_nodes=g.batch_num_nodes)
             # make sure the size doesn't decrease
-            of = obj
-            om = obj_mask
-            cgat_obj = torch.zeros_like(of).repeat(cgat_out.size(0), 1, 1)  # size of number of objects
+            of = obj.repeat(cgat_out.size(0), 1, 1)
+            om = obj_mask.repeat(cgat_mask_out.size(0), 1)
+            cgat_obj = torch.zeros_like(of)  # size of number of objects
             cgat_obj[:, :cgat_out.size(1)] = cgat_out  # fill with output of io attention
-            cgat_mask = torch.zeros_like(om).repeat(cgat_mask_out.size(0), 1)  # mask shaped like original objects
+            cgat_mask = torch.zeros_like(om)  # mask shaped like original objects
             cgat_mask[:, :cgat_mask_out.size(1)] = cgat_mask_out  # copy over mask from io attention
             cgat_obj[~cgat_mask & om] = of[~cgat_mask & om]  # fill the no in_degree nodes with the original state
             # we pass the object mask. We used the cgat_mask only to determine which io's where filled and which not.
