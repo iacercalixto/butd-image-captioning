@@ -80,6 +80,11 @@ class RGCNLayer(nn.Module):
         if self.bias:
             nn.init.xavier_uniform_(self.bias, gain=nn.init.calculate_gain('relu'))
 
+        if edge_gating:
+            nn.init.xavier_uniform_(self.gate_weight, gain=nn.init.calculate_gain('relu'))
+            nn.init.xavier_uniform_(self.gate_bias, gain=nn.init.calculate_gain('relu'))
+
+
     def forward(self, g):
         # if self.num_bases < self.num_rels:
         #     # generate all weights from bases (equation (3))
