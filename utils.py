@@ -331,18 +331,21 @@ def create_captions_file(im_ids, sentences_tokens, file):
         json.dump(preds, f)
 
 
-def create_batched_graphs(o, om, r, rm, pairs, beam_size=1):
+def create_batched_graphs(o, beam_size=1):
+    # assumes a fixed number of nodes
     bsz = o.size(0)
+    num_nodes = o.size(1)
+    ids = list(range(num_nodes))
     graphs = []
-    pairs = pairs.detach().cpu().numpy()
     for b in range(bsz):
         for k in range(beam_size):
             graph = dgl.DGLGraph()
-            graph.add_nodes(num=om[b].sum())
-            graph.ndata['F_n'] = o[b, om[b]]
-            cpu_mask = rm[b].detach().cpu()
-            graph.add_edges(pairs[b][cpu_mask, 0], pairs[b][cpu_mask, 1])
-            graph.edata['F_e'] = r[b, rm[b]]
+            graph.add_nodes(num=num_nodes)
+            graph.ndata['F_n'] = o[b]
+            # add edges, except the self edge
+            for src in ids:
+                dsts = list(set(ids).discard(src))
+            graph.add_edges(src, dsts)
             graphs.append(graph)
     b_graphs = dgl.batch(graphs)
     return b_graphs

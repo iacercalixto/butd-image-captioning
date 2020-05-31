@@ -4,7 +4,7 @@ import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 from datasets import CaptionDataset
-from utils import collate_fn, create_captions_file
+from utils import collate_fn, create_captions_file, create_batched_graphs
 import torch.nn.functional as F
 from tqdm import tqdm
 import argparse
@@ -72,6 +72,9 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir):
         image_features_mean = image_features.mean(1)
         image_features_mean = image_features_mean.expand(k, 2048)
 
+        # initialize the graphs
+        g = create_batched_graphs(image_features, beam_size=k)
+
         # Tensor to store top k previous words at each step; now they're just <start>
         k_prev_words = torch.tensor([[word_map['<start>']]] * k, dtype=torch.long).to(device)  # (k, 1)
 
@@ -96,7 +99,8 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir):
             embeddings = decoder.embedding(k_prev_words).squeeze(1)  # (s, embed_dim)
             h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, embeddings], dim=1),
                                                 (h1, c1))  # (batch_size_t, decoder_dim)
-            attention_weighted_encoding = decoder.attention(image_features, h1)
+            cgat_out, _ = decoder.context_gat(h1, g, batch_num_nodes=g.batch_num_nodes)
+            attention_weighted_encoding = decoder.attention(cgat_out, h1)
             h2, c2 = decoder.language_model(torch.cat([attention_weighted_encoding, h1], dim=1), (h2, c2))
             scores = decoder.fc(h2)  # (s, vocab_size)
             scores = F.log_softmax(scores, dim=1)

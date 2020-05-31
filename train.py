@@ -40,7 +40,8 @@ def main():
                           embed_dim=args.emb_dim,
                           decoder_dim=args.decoder_dim,
                           vocab_size=len(word_map),
-                          dropout=args.dropout)
+                          dropout=args.dropout,
+                          cgat_k_steps=args.cgat_k_steps)
         decoder_optimizer = torch.optim.Adamax(params=filter(lambda p: p.requires_grad, decoder.parameters()))
         tracking = {'eval': [], 'test': None}
         start_epoch = 0
@@ -373,6 +374,7 @@ if __name__ == '__main__':
     parser.add_argument('--emb_dim', default=1024, type=int, help='dimension of word embeddings')
     parser.add_argument('--attention_dim', default=1024, type=int, help='dimension of attention linear layers')
     parser.add_argument('--decoder_dim', default=1024, type=int, help='dropout probability')
+    parser.add_argument('--cgat_k_steps', default=1, type=int, help='how many CGAT steps to do')
     parser.add_argument('--dropout', default=0.5, type=float, help='dimension of decoder RNN')
     parser.add_argument('--epochs', default=50, type=int,
                         help='number of epochs to train for (if early stopping is not triggered)')
@@ -394,12 +396,13 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     args.outdir = os.path.join(args.outdir,
-                               'butd',
+                               'butd_CGAT',
                                'batch_size-{bs}_epochs-{ep}_dropout-{drop}_patience-{pat}_stop-metric-{met}'.format(
                                    bs=args.batch_size, ep=args.epochs, drop=args.dropout,
                                    pat=args.patience, met=args.stopping_metric),
                                'emb-{emb}_att-{att}_dec-{dec}'.format(emb=args.emb_dim, att=args.attention_dim,
                                                                       dec=args.decoder_dim),
+                               'cgat_kstep-{}'.format(args.cgat_k_steps),
                                'seed-{}'.format(args.seed))
     if os.path.exists(args.outdir) and args.checkpoint is None:
         answer = input("\n\t!! WARNING !! \nthe specified --outdir already exists, "
