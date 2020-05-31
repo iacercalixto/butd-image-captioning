@@ -344,8 +344,10 @@ def create_batched_graphs(o, beam_size=1):
             graph.ndata['F_n'] = o[b]
             # add edges, except the self edge
             for src in ids:
-                dsts = list(set(ids).discard(src))
-            graph.add_edges(src, dsts)
+                dsts = set(ids)
+                dsts.discard(src)
+                dsts = list(dsts)
+                graph.add_edges(src, dsts)
             graphs.append(graph)
     b_graphs = dgl.batch(graphs)
     return b_graphs
