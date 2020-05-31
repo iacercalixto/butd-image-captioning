@@ -103,13 +103,13 @@ class ContextGAT(nn.Module):
 
     def io_attention_reduce(self, nodes):
         # This is executed per node
-        if self.use_obj_info and self.use_obj_info:
+        if self.use_obj_info and self.use_rel_info:
             s_ne = torch.cat([nodes.mailbox['s_n'], nodes.mailbox['s_e']], dim=-2)
             F_ne = torch.cat([nodes.mailbox['F_n'], nodes.mailbox['F_e']], dim=-2)
-        if not self.use_obj_info and self.use_obj_info:
+        if not self.use_obj_info and self.use_rel_info:
             s_ne = nodes.mailbox['s_e']
             F_ne = nodes.mailbox['F_e']
-        if self.use_obj_info and not self.use_obj_info:
+        if self.use_obj_info and not self.use_rel_info:
             s_ne = nodes.mailbox['s_n']
             F_ne = nodes.mailbox['F_n']
         F_i = nodes.data['F_n_t']
