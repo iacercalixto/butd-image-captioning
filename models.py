@@ -138,6 +138,7 @@ class Decoder(nn.Module):
         graph_features = torch.split(graph_features, graphs.batch_num_nodes)
         graph_features = pad_sequence(graph_features, batch_first=True)
         graph_mask = graph_features.sum(dim=-1) != 0
+        print(graph_features.shape, graph_mask.shape)
 
         graph_features_mean = graph_features.sum(dim=1) / graph_mask.sum(dim=1, keepdim=True)
         graph_features_mean = graph_features_mean.squeeze(1).to(device)
