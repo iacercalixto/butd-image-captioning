@@ -120,8 +120,6 @@ class Decoder(nn.Module):
 
         # Flatten image
         image_features_mean = image_features.mean(1).to(device)  # (batch_size, num_pixels, encoder_dim)
-        graph_features = torch.cat([object_features, relation_features], dim=1)
-        graph_mask = torch.cat([object_mask, relation_mask], dim=1)
         # Sort input data by decreasing lengths; why? apparent below
         caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
         image_features = image_features[sort_ind]
@@ -165,6 +163,8 @@ class Decoder(nn.Module):
         # are then passed to the language model 
         for t in range(max(decode_lengths)):
             batch_size_t = sum([l > t for l in decode_lengths])
+            print(h2[:batch_size_t].shape, image_features_mean[:batch_size_t].shape,
+                  graph_features_mean[:batch_size_t].shape, embeddings[:batch_size_t, t, :].shape)
             h1, c1 = self.top_down_attention(torch.cat([h2[:batch_size_t],
                                                         image_features_mean[:batch_size_t],
                                                         graph_features_mean[:batch_size_t],
