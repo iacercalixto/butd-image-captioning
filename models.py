@@ -78,7 +78,7 @@ class Decoder(nn.Module):
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
         self.dropout = nn.Dropout(p=self.dropout)
-        self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + graph_features_dim + decoder_dim,
+        self.top_down_attention = nn.LSTMCell(embed_dim + features_dim + gat_out_dim + decoder_dim,
                                               decoder_dim, bias=True)  # top down attention LSTMCell
         self.language_model = nn.LSTMCell(features_dim + gat_out_dim + decoder_dim, decoder_dim, bias=True)  # language model LSTMCell
         self.fc1 = weight_norm(nn.Linear(decoder_dim, vocab_size))
@@ -163,8 +163,6 @@ class Decoder(nn.Module):
         # are then passed to the language model 
         for t in range(max(decode_lengths)):
             batch_size_t = sum([l > t for l in decode_lengths])
-            print(h2[:batch_size_t].shape, image_features_mean[:batch_size_t].shape,
-                  graph_features_mean[:batch_size_t].shape, embeddings[:batch_size_t, t, :].shape)
             h1, c1 = self.top_down_attention(torch.cat([h2[:batch_size_t],
                                                         image_features_mean[:batch_size_t],
                                                         graph_features_mean[:batch_size_t],
