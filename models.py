@@ -141,7 +141,7 @@ class Decoder(nn.Module):
 
         graph_features_mean = graph_features.sum(dim=1) / graph_mask.sum(dim=1, keepdim=True)
         graph_features_mean = graph_features_mean.to(device)
-        print(torch.isnan(graph_features).any(), torch.isnan(graph_mask).any(), torch.isnan(graph_features_mean).any())
+        print(torch.any((graph_mask.sum(dim=1, keepdim=True) == 0)))
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)
 
