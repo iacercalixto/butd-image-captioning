@@ -140,7 +140,7 @@ class Decoder(nn.Module):
         graph_mask = graph_features.sum(dim=-1) != 0
 
         graph_features_mean = graph_features.sum(dim=1) / graph_mask.sum(dim=1, keepdim=True)
-        graph_features_mean = graph_features_mean.to(device)
+        graph_features_mean = graph_features_mean.squeeze(1).to(device)
 
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)
