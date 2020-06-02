@@ -443,7 +443,7 @@ if __name__ == '__main__':
         print('continueing from checkpoint {} in {}...'.format(args.checkpoint, args.outdir))
     elif not os.path.exists(args.outdir) and args.checkpoint is not None:
         print('set a checkpoint to continue from, but the save directory from --outdir {} does not exist. '
-              'setting --checkpoint to None'.format(args.outdir))
+              'creating directory...')
         os.makedirs(os.path.join(args.outdir, 'hypotheses'), exist_ok=True)
         os.makedirs(os.path.join(args.outdir, 'references'), exist_ok=True)
     else:
