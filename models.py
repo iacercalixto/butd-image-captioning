@@ -138,11 +138,9 @@ class Decoder(nn.Module):
         graph_features = torch.split(graph_features, graphs.batch_num_nodes)
         graph_features = pad_sequence(graph_features, batch_first=True).squeeze(2)
         graph_mask = graph_features.sum(dim=-1) != 0
-        print(graph_features.shape, graph_mask.shape)
 
         graph_features_mean = graph_features.sum(dim=1) / graph_mask.sum(dim=1, keepdim=True)
         graph_features_mean = graph_features_mean.to(device)
-        print(graph_features_mean.shape)
 
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)
