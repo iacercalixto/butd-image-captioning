@@ -135,8 +135,8 @@ class Decoder(nn.Module):
         graphs = graphs.to(device)
 
         graph_features = self.gat(graphs, graphs.ndata['x'])
-        graph_features = torch.split(graph_features, graphs.batch_num_nodes).squeeze(2)
-        graph_features = pad_sequence(graph_features, batch_first=True)
+        graph_features = torch.split(graph_features, graphs.batch_num_nodes)
+        graph_features = pad_sequence(graph_features, batch_first=True).squeeze(2)
         graph_mask = graph_features.sum(dim=-1) != 0
         print(graph_features.shape, graph_mask.shape)
 
