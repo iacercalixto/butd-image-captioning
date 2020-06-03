@@ -141,9 +141,7 @@ class Decoder(nn.Module):
 
         graph_features_mean = graph_features.sum(dim=1) / graph_mask.sum(dim=1, keepdim=True)
         if torch.any(graph_mask.sum(dim=1) == 0):
-            print(graphs.batch_num_nodes, graphs.batch_num_edges, torch.isnan(graph_features).any(), graph_features.sum(dim=-1).sum(dim=-1))
             graph_features_mean[graph_mask.sum(dim=1) == 0] = 0
-            print(torch.isnan(graph_features_mean).any())
             graph_mask[graph_mask.sum(dim=1) == 0, 0] = 1
         graph_features_mean = graph_features_mean.to(device)
 
@@ -185,10 +183,5 @@ class Decoder(nn.Module):
             preds = self.fc(self.dropout(h2))  # (batch_size_t, vocab_size)
             predictions[:batch_size_t, t, :] = preds
             predictions1[:batch_size_t, t, :] = preds1
-            # print(torch.isnan(h1).any(),torch.isnan(h2).any(),torch.isnan(graph_features_mean).any(),torch.isnan(image_features_mean).any(),
-            #       torch.isnan(graph_weighted_enc).any(),torch.isnan(img_weighted_enc).any())
-        if torch.isnan(predictions).any():
-            exit(1)
-
         return predictions, predictions1, encoded_captions, decode_lengths, sort_ind
 
