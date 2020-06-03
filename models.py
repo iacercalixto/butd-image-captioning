@@ -185,7 +185,7 @@ class Decoder(nn.Module):
             predictions[:batch_size_t, t, :] = preds
             predictions1[:batch_size_t, t, :] = preds1
         if torch.isnan(predictions).any():
-            break
+            exit(1)
 
         return predictions, predictions1, encoded_captions, decode_lengths, sort_ind
 
