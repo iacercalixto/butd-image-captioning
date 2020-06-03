@@ -141,8 +141,8 @@ class Decoder(nn.Module):
 
         graph_features_mean = graph_features.sum(dim=1) / graph_mask.sum(dim=1, keepdim=True)
         graph_features_mean[graph_mask.sum(dim=1) == 0] = 0
-        graph_features[graph_mask.sum(dim=1) == 0, 0] = 0
-        graph_mask[graph_mask.sum(dim=1) == 0, 0] = 1
+        # graph_features[graph_mask.sum(dim=1) == 0, 0] = 0
+        # graph_mask[graph_mask.sum(dim=1) == 0, 0] = 1
         graph_features_mean = graph_features_mean.to(device)
 
         # Embedding
@@ -173,6 +173,7 @@ class Decoder(nn.Module):
                                              (h1[:batch_size_t], c1[:batch_size_t]))
             graph_weighted_enc = self.cascade1_attention(graph_features[:batch_size_t], h1[:batch_size_t],
                                                          mask=graph_mask[:batch_size_t])
+            print(torch.isnan(graph_features_mean).any(), graph_mask.sum(dim=1) == 0, torch.isnan(graph_weighted_enc).any())
             img_weighted_enc = self.cascade2_attention(image_features[:batch_size_t],
                                                        torch.cat([h1[:batch_size_t], graph_weighted_enc[:batch_size_t]],
                                                                  dim=1))
