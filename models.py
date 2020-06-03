@@ -184,6 +184,8 @@ class Decoder(nn.Module):
             preds = self.fc(self.dropout(h2))  # (batch_size_t, vocab_size)
             predictions[:batch_size_t, t, :] = preds
             predictions1[:batch_size_t, t, :] = preds1
+        if torch.isnan(predictions).any():
+            break
 
         return predictions, predictions1, encoded_captions, decode_lengths, sort_ind
 
