@@ -70,7 +70,7 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout = dropout
 
-        self.gat = GATConv(graph_features_dim, gat_out_dim, gat_num_heads, feat_drop=dropout, attn_drop=dropout)
+        self.gat = GATConv(graph_features_dim, gat_out_dim, gat_num_heads)
 
         # cascade attention network
         self.cascade1_attention = Attention(gat_out_dim, decoder_dim, attention_dim)
