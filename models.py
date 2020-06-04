@@ -271,16 +271,15 @@ class Decoder(nn.Module):
 
         edge_score = None
         if self.edge_gating:
-            print(graphs.ndata['x'].shape, graphs.edata['rel_type'].shape, graphs.all_edges()[0].shape, graphs.ndata['x'][graphs.all_edges()[0]].shape)
             w = self.gate_weight1[graphs.edata['rel_type']]
             b = self.gate_bias1[graphs.edata['rel_type']]
             edge_score = torch.sigmoid(torch.bmm(graphs.ndata['x'][graphs.all_edges()[0]].unsqueeze(1), w).squeeze(1) + b)
-        graphs.ndata['h'] = self.rgcn1(graphs, graphs.ndata['x'], norm=edge_score)
+        graphs.ndata['h'] = self.rgcn1(graphs, graphs.ndata['x'], etypes=graphs.edata['rel_type'], norm=edge_score)
         if self.edge_gating:
             w = self.gate_weight2[graphs.edata['rel_type']]
             b = self.gate_bias2[graphs.edata['rel_type']]
             edge_score = torch.sigmoid(torch.bmm(graphs.ndata['h'][graphs.all_edges()[0]].unsqueeze(1), w).squeeze(1) + b)
-        graph_features = self.rgcn2(graphs, graphs.ndata['h'], norm=edge_score)
+        graph_features = self.rgcn2(graphs, graphs.ndata['h'], etypes=graphs.edata['rel_type'], norm=edge_score)
 
         graph_features = torch.split(graph_features, graphs.batch_num_nodes)
         graph_features = pad_sequence(graph_features, batch_first=True)
