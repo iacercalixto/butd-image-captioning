@@ -271,8 +271,9 @@ class Decoder(nn.Module):
 
         edge_score = None
         if self.edge_gating:
-            w = self.gate_weight1[graphs.edata.data['rel_type']]
-            b = self.gate_bias1[graphs.edata.data['rel_type']]
+            print(graphs.ndata['x'].shape, graphs.edata['rel_type'].shape, graphs.all_edges()[0].shape, graphs.ndata['x'][graphs.all_edges()[0]].shape)
+            w = self.gate_weight1[graphs.edata['rel_type']]
+            b = self.gate_bias1[graphs.edata['rel_type']]
             edge_score = torch.sigmoid(torch.bmm(graphs.ndata['x'][graphs.all_edges()[0]].unsqueeze(1), w).squeeze(1) + b)
         graphs.ndata['h'] = self.rgcn1(graphs, graphs.ndata['x'], norm=edge_score)
         if self.edge_gating:
