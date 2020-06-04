@@ -269,13 +269,16 @@ class Decoder(nn.Module):
         # graph_features = pad_sequence(graph_features, batch_first=True)
         # graph_mask = graph_features.sum(dim=-1) != 0
 
-        w = self.gate_weight1[graphs.edata['rel_type']]
-        b = self.gate_bias1[graphs.edata['rel_type']]
-        edge_score = torch.sigmoid(torch.bmm(graphs.edges.src['x'].unsqueeze(1), w).squeeze(1) + b)
+        edge_score = None
+        if self.edge_gating:
+            w = self.gate_weight1[graphs.edata.data['rel_type']]
+            b = self.gate_bias1[graphs.edata.data['rel_type']]
+            edge_score = torch.sigmoid(torch.bmm(graphs.ndata['x'][graphs.all_edges()[0]].unsqueeze(1), w).squeeze(1) + b)
         graphs.ndata['h'] = self.rgcn1(graphs, graphs.ndata['x'], norm=edge_score)
-        w = self.gate_weight2[graphs.edata['rel_type']]
-        b = self.gate_bias2[graphs.edata['rel_type']]
-        edge_score = torch.sigmoid(torch.bmm(graphs.edges.src['h'].unsqueeze(1), w).squeeze(1) + b)
+        if self.edge_gating:
+            w = self.gate_weight2[graphs.edata['rel_type']]
+            b = self.gate_bias2[graphs.edata['rel_type']]
+        edge_score = torch.sigmoid(torch.bmm(graphs.ndata['h'][graphs.all_edges()[0]].unsqueeze(1), w).squeeze(1) + b)
         graph_features = self.rgcn2(graphs, graphs.ndata['h'], norm=edge_score)
 
         graph_features = torch.split(graph_features, graphs.batch_num_nodes)
