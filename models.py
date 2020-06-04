@@ -2,8 +2,9 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
-from dgl import DGLGraph
-import dgl.function as fn
+# from dgl import DGLGraph
+# import dgl.function as fn
+from dgl.nn.pytorch import RelGraphConv
 from functools import partial
 from utils import create_batched_graphs
 from torch.nn.utils.rnn import pad_sequence
@@ -48,117 +49,117 @@ class Attention(nn.Module):
         return attention_weighted_encoding
 
 
-class RGCNLayer(nn.Module):
-    """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
-    def __init__(self, in_feat, out_feat, bias=None, activation=None, is_input_layer=False, edge_gating=False):
-        super(RGCNLayer, self).__init__()
-        self.in_feat = in_feat
-        self.out_feat = out_feat
-        self.bias = bias
-        self.activation = activation
-        self.is_input_layer = is_input_layer
-        self.edge_gating = edge_gating
-        self.num_edge_types = 5  # subj [0], obj[1], subj'[2], obj'[3], self[4]
-
-        # weight bases in equation (3)
-        self.weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, self.out_feat))
-        if edge_gating:
-            self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat,1))
-            self.gate_bias = nn.Parameter(torch.Tensor(self.num_edge_types, 1))
-        # if self.num_bases < self.num_rels:
-        #     # linear combination coefficients in equation (3)
-        #     self.w_comp = nn.Parameter(torch.Tensor(self.num_rels, self.num_bases))
-
-        # add bias
-        if self.bias:
-            self.bias = nn.Parameter(torch.Tensor(out_feat))
-
-        # init trainable parameters
-        nn.init.xavier_uniform_(self.weight, gain=nn.init.calculate_gain('relu'))
-        # if self.num_bases < self.num_rels:
-        #     nn.init.xavier_uniform_(self.w_comp, gain=nn.init.calculate_gain('relu'))
-        if self.bias:
-            nn.init.xavier_uniform_(self.bias, gain=nn.init.calculate_gain('relu'))
-
-        if edge_gating:
-            nn.init.xavier_uniform_(self.gate_weight, gain=nn.init.calculate_gain('relu'))
-            nn.init.xavier_uniform_(self.gate_bias, gain=nn.init.calculate_gain('relu'))
-
-
-    def forward(self, g):
-        # if self.num_bases < self.num_rels:
-        #     # generate all weights from bases (equation (3))
-        #     weight = self.weight.view(self.in_feat, self.num_bases, self.out_feat)
-        #     weight = torch.matmul(self.w_comp, weight).view(self.num_rels, self.in_feat, self.out_feat)
-        # else:
-        weight = self.weight
-
-        if self.is_input_layer:
-            feature_name = 'x'
-        else:
-            feature_name = 'h'
-        edge_gating = self.edge_gating
-        def message_func(edges):
-            w = weight[edges.data['rel_type']]
-            msg = torch.bmm(edges.src[feature_name].unsqueeze(1), w).squeeze()
-            if edge_gating:
-                w = self.gate_weight[edges.data['rel_type']]
-                b = self.gate_bias[edges.data['rel_type']]
-                edge_score = torch.sigmoid(torch.bmm(edges.src[feature_name].unsqueeze(1), w).squeeze(1) + b)
-                msg = edge_score * msg
-            return {'msg': msg}
-
-        def apply_func(nodes):
-            h = nodes.data['h']
-            if self.bias:
-                h = h + self.bias
-            if self.activation:
-                h = self.activation(h)
-            return {'h': h}
-
-        g.update_all(message_func, fn.sum(msg='msg', out='h'), apply_func)
-
-
-class RGCNModule(nn.Module):
-    """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
-
-    def __init__(self, in_dim, h_dim, out_dim, num_layers=1, edge_gating=False):
-        super(RGCNModule, self).__init__()
-        self.in_dim = in_dim
-        self.h_dim = h_dim
-        self.out_dim = out_dim
-        self.num_layers = num_layers
-        self.edge_gating = edge_gating
-        # create rgcn layers
-        self.build_model()
-
-    def build_model(self):
-        self.layers = nn.ModuleList()
-        for l in range(self.num_layers):
-            activation = F.relu
-            is_input_layer = False
-            if l == 0:
-                in_dim = self.in_dim
-                is_input_layer = True
-            else:
-                in_dim = self.h_dim
-            if l == self.num_layers-1:
-                out_dim = self.out_dim
-                activation = partial(F.softmax, dim=1)
-            else:
-                out_dim = self.h_dim
-            self.layers.append(RGCNLayer(in_dim, out_dim, activation=activation, is_input_layer=is_input_layer,
-                                         edge_gating=self.edge_gating))
-
-    # initialize feature for each node
-    def create_features(self, num_nodes):
-        features = torch.arange(num_nodes)
-        return features
-
-    def forward(self, g):
-        for layer in self.layers:
-            layer(g)
-        return g.ndata.pop('h')
+# class RGCNLayer(nn.Module):
+#     """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
+#     def __init__(self, in_feat, out_feat, bias=None, activation=None, is_input_layer=False, edge_gating=False):
+#         super(RGCNLayer, self).__init__()
+#         self.in_feat = in_feat
+#         self.out_feat = out_feat
+#         self.bias = bias
+#         self.activation = activation
+#         self.is_input_layer = is_input_layer
+#         self.edge_gating = edge_gating
+#         self.num_edge_types = 5  # subj [0], obj[1], subj'[2], obj'[3], self[4]
+#
+#         # weight bases in equation (3)
+#         self.weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, self.out_feat))
+#         if edge_gating:
+#             self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat,1))
+#             self.gate_bias = nn.Parameter(torch.Tensor(self.num_edge_types, 1))
+#         # if self.num_bases < self.num_rels:
+#         #     # linear combination coefficients in equation (3)
+#         #     self.w_comp = nn.Parameter(torch.Tensor(self.num_rels, self.num_bases))
+#
+#         # add bias
+#         if self.bias:
+#             self.bias = nn.Parameter(torch.Tensor(out_feat))
+#
+#         # init trainable parameters
+#         nn.init.xavier_uniform_(self.weight, gain=nn.init.calculate_gain('relu'))
+#         # if self.num_bases < self.num_rels:
+#         #     nn.init.xavier_uniform_(self.w_comp, gain=nn.init.calculate_gain('relu'))
+#         if self.bias:
+#             nn.init.xavier_uniform_(self.bias, gain=nn.init.calculate_gain('relu'))
+#
+#         if edge_gating:
+#             nn.init.xavier_uniform_(self.gate_weight, gain=nn.init.calculate_gain('relu'))
+#             nn.init.xavier_uniform_(self.gate_bias, gain=nn.init.calculate_gain('relu'))
+#
+#
+#     def forward(self, g):
+#         # if self.num_bases < self.num_rels:
+#         #     # generate all weights from bases (equation (3))
+#         #     weight = self.weight.view(self.in_feat, self.num_bases, self.out_feat)
+#         #     weight = torch.matmul(self.w_comp, weight).view(self.num_rels, self.in_feat, self.out_feat)
+#         # else:
+#         weight = self.weight
+#
+#         if self.is_input_layer:
+#             feature_name = 'x'
+#         else:
+#             feature_name = 'h'
+#         edge_gating = self.edge_gating
+#         def message_func(edges):
+#             w = weight[edges.data['rel_type']]
+#             msg = torch.bmm(edges.src[feature_name].unsqueeze(1), w).squeeze()
+#             if edge_gating:
+#                 w = self.gate_weight[edges.data['rel_type']]
+#                 b = self.gate_bias[edges.data['rel_type']]
+#                 edge_score = torch.sigmoid(torch.bmm(edges.src[feature_name].unsqueeze(1), w).squeeze(1) + b)
+#                 msg = edge_score * msg
+#             return {'msg': msg}
+#
+#         def apply_func(nodes):
+#             h = nodes.data['h']
+#             if self.bias:
+#                 h = h + self.bias
+#             if self.activation:
+#                 h = self.activation(h)
+#             return {'h': h}
+#
+#         g.update_all(message_func, fn.sum(msg='msg', out='h'), apply_func)
+#
+#
+# class RGCNModule(nn.Module):
+#     """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
+#
+#     def __init__(self, in_dim, h_dim, out_dim, num_layers=1, edge_gating=False):
+#         super(RGCNModule, self).__init__()
+#         self.in_dim = in_dim
+#         self.h_dim = h_dim
+#         self.out_dim = out_dim
+#         self.num_layers = num_layers
+#         self.edge_gating = edge_gating
+#         # create rgcn layers
+#         self.build_model()
+#
+#     def build_model(self):
+#         self.layers = nn.ModuleList()
+#         for l in range(self.num_layers):
+#             activation = F.relu
+#             is_input_layer = False
+#             if l == 0:
+#                 in_dim = self.in_dim
+#                 is_input_layer = True
+#             else:
+#                 in_dim = self.h_dim
+#             if l == self.num_layers-1:
+#                 out_dim = self.out_dim
+#                 activation = partial(F.softmax, dim=1)
+#             else:
+#                 out_dim = self.h_dim
+#             self.layers.append(RGCNLayer(in_dim, out_dim, activation=activation, is_input_layer=is_input_layer,
+#                                          edge_gating=self.edge_gating))
+#
+#     # initialize feature for each node
+#     def create_features(self, num_nodes):
+#         features = torch.arange(num_nodes)
+#         return features
+#
+#     def forward(self, g):
+#         for layer in self.layers:
+#             layer(g)
+#         return g.ndata.pop('h')
 
 
 class Decoder(nn.Module):
@@ -184,9 +185,22 @@ class Decoder(nn.Module):
         self.decoder_dim = decoder_dim
         self.vocab_size = vocab_size
         self.dropout = dropout
+        self.edge_gating = edge_gating
 
-        self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim,
-                               num_layers=rgcn_layers, edge_gating=edge_gating)
+        # self.rgcn = RGCNModule(graph_features_dim, rgcn_h_dim, rgcn_out_dim,
+        #                        num_layers=rgcn_layers, edge_gating=edge_gating)
+        self.rgcn1 = RelGraphConv(graph_features_dim, rgcn_h_dim, num_rels=5)
+        self.rgcn2 = RelGraphConv(rgcn_h_dim, rgcn_out_dim, num_rels=5)
+        if edge_gating:
+            self.gate_weight1 = nn.Parameter(torch.Tensor(5, graph_features_dim, 1))
+            self.gate_bias1 = nn.Parameter(torch.Tensor(5, 1))
+            self.gate_weight2 = nn.Parameter(torch.Tensor(5, rgcn_h_dim, 1))
+            self.gate_bias2 = nn.Parameter(torch.Tensor(5, 1))
+            nn.init.xavier_uniform_(self.gate_weight1, gain=nn.init.calculate_gain('relu'))
+            nn.init.xavier_uniform_(self.gate_bias1, gain=nn.init.calculate_gain('relu'))
+            nn.init.xavier_uniform_(self.gate_weight2, gain=nn.init.calculate_gain('relu'))
+            nn.init.xavier_uniform_(self.gate_bias2, gain=nn.init.calculate_gain('relu'))
+
 
         # cascade attention network
         self.cascade1_attention = Attention(rgcn_out_dim, decoder_dim, attention_dim)
@@ -250,7 +264,20 @@ class Decoder(nn.Module):
         graphs = create_batched_graphs(object_features, object_mask, relation_features, relation_mask, pair_ids)
         graphs = graphs.to(device)
 
-        graph_features = self.rgcn(graphs)
+        # graph_features = self.rgcn(graphs)
+        # graph_features = torch.split(graph_features, graphs.batch_num_nodes)
+        # graph_features = pad_sequence(graph_features, batch_first=True)
+        # graph_mask = graph_features.sum(dim=-1) != 0
+
+        w = self.gate_weight1[graphs.edata['rel_type']]
+        b = self.gate_bias1[graphs.edata['rel_type']]
+        edge_score = torch.sigmoid(torch.bmm(graphs.edges.src['x'].unsqueeze(1), w).squeeze(1) + b)
+        graphs.ndata['h'] = self.rgcn1(graphs, graphs.ndata['x'], norm=edge_score)
+        w = self.gate_weight2[graphs.edata['rel_type']]
+        b = self.gate_bias2[graphs.edata['rel_type']]
+        edge_score = torch.sigmoid(torch.bmm(graphs.edges.src['h'].unsqueeze(1), w).squeeze(1) + b)
+        graph_features = self.rgcn2(graphs, graphs.ndata['h'], norm=edge_score)
+
         graph_features = torch.split(graph_features, graphs.batch_num_nodes)
         graph_features = pad_sequence(graph_features, batch_first=True)
         graph_mask = graph_features.sum(dim=-1) != 0
