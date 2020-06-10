@@ -10,12 +10,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # Create input files (along with word map)
     create_input_files(dataset=args.dataset,
-                       karpathy_json_path='data/caption_datasets/dataset_coco.json',
+                       karpathy_json_path=args.dataset_path,
                        captions_per_image=5,
                        min_word_freq=5,
                        output_folder='final_dataset',
                        max_len=50)
     if args.sg:
         create_scene_graph_input_files(dataset=args.dataset,
-                                       karpathy_json_path='data/caption_datasets/dataset_coco.json',
+                                       karpathy_json_path=args.dataset_path,
                                        output_folder='final_dataset')
