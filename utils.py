@@ -35,7 +35,7 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
     :param max_len: don't sample captions longer than this length
     """
 
-    assert dataset in {'coco', 'vg_coco', 'vg_coco_high', 'vg_coco_medium', 'vg_coco_low'}
+    assert dataset in {'coco', 'vg-coco', 'vg-coco-high', 'vg-coco-medium', 'vg-coco-low'}
 
     # Read Karpathy JSON
     with open(karpathy_json_path, 'r') as j:
@@ -172,7 +172,7 @@ def create_scene_graph_input_files(dataset, karpathy_json_path, output_folder):
     :param max_len: don't sample captions longer than this length
     """
 
-    assert dataset in {'coco', 'vg_coco', 'vg_coco_high', 'vg_coco_medium', 'vg_coco_low'}
+    assert dataset in {'coco', 'vg-coco', 'vg-coco-high', 'vg-coco-medium', 'vg-coco-low'}
 
     # Read Karpathy JSON
     with open(karpathy_json_path, 'r') as j:
