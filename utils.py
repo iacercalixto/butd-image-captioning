@@ -91,8 +91,8 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
     assert len(train_image_det) == len(train_image_captions)
     assert len(val_image_det) == len(val_image_captions)
     assert len(test_image_det) == len(test_image_captions)
-    print('number of examples for train/val/test is: {}/{}/{]'.format(len(train_image_det), len(val_image_det),
-                                                                          len(test_image_det)))
+    print('number of examples for train/val/test is: {}/{}/{}'.format(len(train_image_det), len(val_image_det),
+                                                                      len(test_image_det)))
 
     # Create word map
     words = [w for w in word_freq.keys() if word_freq[w] > min_word_freq]
