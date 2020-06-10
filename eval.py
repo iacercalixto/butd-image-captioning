@@ -202,7 +202,7 @@ if __name__ == '__main__':
                         help='folder with data files saved by create_input_files.py')
     parser.add_argument('--data_name', default='coco_5_cap_per_img_5_min_word_freq', type=str,
                         help='base name shared by data files')
-    parser.add_argument('--dataset', default='TEST', type=str, help='base name shared by data files')
+    parser.add_argument('--dataset', default='TEST', type=str, help='which split to use')
     parser.add_argument('--outdir', default='outputs', type=str,
                         help='path to location where the outputs are saved, so the checkpoint')
     parser.add_argument('--checkpoint_file', type=str, required=True, help="Checkpoint to use for beam search.")
