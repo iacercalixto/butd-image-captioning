@@ -81,12 +81,21 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
         graphs_mask = graphs_mask.to(device)
         image_features_mean = image_features.mean(1)
         image_features_mean = image_features_mean.expand(k, 2048)
-        graph_features_mean = graphs.sum(dim=1) / graphs_mask.sum(dim=1, keepdim=True)
-        graph_features_mean = graph_features_mean.to(device)
-        graph_features_mean = graph_features_mean.expand(k, graph_feature_dim)
+        # graph_features_mean = graphs.sum(dim=1) / graphs_mask.sum(dim=1, keepdim=True)
+        # graph_features_mean = graph_features_mean.to(device)
+        # graph_features_mean = graph_features_mean.expand(k, graph_feature_dim)
 
         graphs = create_batched_graphs(obj, obj_mask, rel, rel_mask, pair_idx)
         graphs = decoder.gat(graphs, graphs.ndata['x'])
+        graph_features = torch.split(graph_features, graphs.batch_num_nodes)
+        graph_features = pad_sequence(graph_features, batch_first=True).squeeze(2)
+        graph_mask = graph_features.sum(dim=-1) != 0
+
+        graph_features_mean = graph_features.sum(dim=1) / graph_mask.sum(dim=1, keepdim=True)
+        if torch.any(graph_mask.sum(dim=1) == 0):
+            graph_features_mean[graph_mask.sum(dim=1) == 0] = 0
+            graph_mask[graph_mask.sum(dim=1) == 0, 0] = 1
+        graph_features_mean = graph_features_mean.to(device)
 
         # Tensor to store top k previous words at each step; now they're just <start>
         k_prev_words = torch.tensor([[word_map['<start>']]] * k, dtype=torch.long).to(device)  # (k, 1)
@@ -112,7 +121,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
             embeddings = decoder.embedding(k_prev_words).squeeze(1)  # (s, embed_dim)
             h1, c1 = decoder.top_down_attention(torch.cat([h2, image_features_mean, graph_features_mean, embeddings], dim=1),
                                                 (h1, c1))  # (batch_size_t, decoder_dim)
-            graph_weighted_enc = decoder.cascade1_attention(graphs, h1)
+            graph_weighted_enc = decoder.cascade1_attention(graph_features, h1)
             img_weighted_enc = decoder.cascade2_attention(image_features, torch.cat([h1, graph_weighted_enc], dim=1))
             h2, c2 = decoder.language_model(torch.cat([graph_weighted_enc, img_weighted_enc, h1], dim=1), (h2, c2))
             scores = decoder.fc(h2)  # (s, vocab_size)
