@@ -86,7 +86,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
         # graph_features_mean = graph_features_mean.expand(k, graph_feature_dim)
 
         graphs = create_batched_graphs(obj, obj_mask, rel, rel_mask, pair_idx)
-        graphs = decoder.gat(graphs, graphs.ndata['x'])
+        graph_features = decoder.gat(graphs, graphs.ndata['x'])
         graph_features = torch.split(graph_features, graphs.batch_num_nodes)
         graph_features = pad_sequence(graph_features, batch_first=True).squeeze(2)
         graph_mask = graph_features.sum(dim=-1) != 0
