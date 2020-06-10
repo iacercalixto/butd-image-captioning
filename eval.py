@@ -96,6 +96,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
             graph_features_mean[graph_mask.sum(dim=1) == 0] = 0
             graph_mask[graph_mask.sum(dim=1) == 0, 0] = 1
         graph_features_mean = graph_features_mean.to(device)
+        graph_features_mean = graph_features_mean.expand(k, graph_feature_dim)
 
         # Tensor to store top k previous words at each step; now they're just <start>
         k_prev_words = torch.tensor([[word_map['<start>']]] * k, dtype=torch.long).to(device)  # (k, 1)
