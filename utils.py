@@ -95,16 +95,21 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
                                                                       len(test_image_det)))
 
     # Create word map
-    words = [w for w in word_freq.keys() if word_freq[w] > min_word_freq]
-    word_map = {k: v + 1 for v, k in enumerate(words)}
-    word_map['<unk>'] = len(word_map) + 1
-    word_map['<start>'] = len(word_map) + 1
-    word_map['<end>'] = len(word_map) + 1
-    word_map['<pad>'] = 0
-   
     # Create a base/root name for all output files
     base_filename = dataset + '_' + str(captions_per_image) + '_cap_per_img_' + str(min_word_freq) + '_min_word_freq'
-    
+
+    if dataset == 'coco':
+        words = [w for w in word_freq.keys() if word_freq[w] > min_word_freq]
+        word_map = {k: v + 1 for v, k in enumerate(words)}
+        word_map['<unk>'] = len(word_map) + 1
+        word_map['<start>'] = len(word_map) + 1
+        word_map['<end>'] = len(word_map) + 1
+        word_map['<pad>'] = 0
+    else:
+        coco_base = 'coco' + '_' + str(captions_per_image) + '_cap_per_img_' + str(min_word_freq) + '_min_word_freq'
+        with open(os.path.join(output_folder, 'WORDMAP_' + coco_base + '.json'), 'r') as j:
+            word_map = json.load(j)
+
     # Save word map to a JSON
     with open(os.path.join(output_folder, 'WORDMAP_' + base_filename + '.json'), 'w') as j:
         json.dump(word_map, j)
