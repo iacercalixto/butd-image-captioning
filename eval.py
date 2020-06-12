@@ -178,8 +178,10 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
 
     # Calculate scores
     # metrics_dict = nlgeval.compute_metrics(references, hypotheses)
-    hypotheses_file = os.path.join(outdir, 'hypotheses', '{}.Hypotheses.json'.format(dataset))
-    references_file = os.path.join(outdir, 'references', '{}.References.json'.format(dataset))
+    hypotheses_file = os.path.join(outdir, 'hypotheses', '{}.{}.Hypotheses.json'.format(dataset,
+                                                                                        data_name.split('_')[0]))
+    references_file = os.path.join(outdir, 'references', '{}.{}.References.json'.format(dataset,
+                                                                                        data_name.split('_')[0]))
     create_captions_file(range(len(hypotheses)), hypotheses, hypotheses_file)
     create_captions_file(range(len(references)), references, references_file)
     coco = COCO(references_file)
