@@ -239,6 +239,8 @@ if __name__ == '__main__':
                         help='weights for scene graph generator')
     parser.add_argument('--path-to-imginfo', default='/cw/working-arwen/victorm/Datasets/vg_bm/image_data.json',
                         type=str, help='image info to determine which have a coco_id')
+    parser.add_argument('--outdir', default='',
+                        type=str, help='image info to determine which have a coco_id')
     # Parse the arguments
     args = parser.parse_args()
     sgg_cfg_file = args.sgg_cfg_file
@@ -251,6 +253,11 @@ if __name__ == '__main__':
     val_ids_file = 'val_scene-graph_ids_groundtruth.pkl'
     train_imgs_path = 'data/train2014/'
     val_imgs_path = 'data/val2014/'
+    if outdir:
+        train_data_file = os.path.join(args.outdir, train_data_file)
+        val_data_file = os.path.join(args.outdir, val_data_file)
+        train_indices_file = os.path.join(args.outdir, train_indices_file)
+        val_indices_file = os.path.join(args.outdir, val_indices_file)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # sets device for model and PyTorch tensors
 
     construct_sgg_hdf5(train_data_file, train_indices_file, train_imgs_path, buffer_size=args.buffersize)
