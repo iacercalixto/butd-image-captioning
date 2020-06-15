@@ -77,12 +77,17 @@ def collect_sgg_features(dataset, buffer_size=1):
     scene_parser.eval()
     # create dataloader to loop over the dataset
     start_ = 0
+    skipped=0
     for i, data in enumerate(data_loader_test, 0):
+        if skipped % 100 == 0:
+            tqdm.write('skipped: {}'.format(skipped))
         if image_info[i]['coco_id'] is None:
+            skipped+=1
             continue
         else:
             image_coco_id = image_info[i]['coco_id']
             if image_coco_id not in dataset.imgids:
+                skipped+=1
                 continue
         # for _ in range(int(np.ceil(len(dataset)/buffer_size))):
         #     bs = len(dataset)-start_ if start_+buffer_size > len(dataset) else buffer_size
