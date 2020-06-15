@@ -78,6 +78,12 @@ def collect_sgg_features(dataset, buffer_size=1):
     # create dataloader to loop over the dataset
     start_ = 0
     for i, data in enumerate(data_loader_test, 0):
+        if image_info[i]['coco_id'] is None:
+            continue
+        else:
+            image_coco_id = image_info[i]['coco_id']
+            if image_coco_id not in dataset.imgids:
+                continue
         # for _ in range(int(np.ceil(len(dataset)/buffer_size))):
         #     bs = len(dataset)-start_ if start_+buffer_size > len(dataset) else buffer_size
         bs = 1
@@ -96,10 +102,6 @@ def collect_sgg_features(dataset, buffer_size=1):
             'num_rels': 0
         }
         max_rels = 0
-        if image_info[i]['coco_id'] is None:
-            continue
-        else:
-            image_coco_id = image_info[i]['coco_id']
         imgs, targets, image_ids = data
         imgs = imgs.to(device)
         targets = [target.to(device) for target in targets]
