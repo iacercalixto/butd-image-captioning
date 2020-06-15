@@ -123,6 +123,9 @@ def collect_sgg_features(dataset, buffer_size=1):
         buffer['relation_pairs'][0, :num_rels] = rel_boxes.get_field('idx_pairs').detach().cpu().numpy()
         buffer['ids'].append(image_coco_id)
         buffer['num_rels'] = num_rels
+        tqdm.write('target obj/rels: {0:0=3d}/{0:0=3d} - result obj/rels: {0:0=3d}/{0:0=3d}'.format(
+            len(targets[0]), targets[0].get_field('relation_labels').shape[0], num_obj, num_rels
+        ))
         yield buffer
 
 
