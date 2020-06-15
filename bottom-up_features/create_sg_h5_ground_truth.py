@@ -3,6 +3,7 @@ import os
 import sys
 import json
 try:
+    from lib.data.build import build_data_loader
     from lib.config import cfg as sgg_cfg
     from lib.data.transforms import build_transforms
     from lib.scene_parser.parser import build_scene_parser
@@ -64,7 +65,7 @@ def collect_sgg_features(dataset, buffer_size=1):
     sgg_cfg.inference = True
     sgg_cfg.instance = -1
     sgg_cfg.resume = 1
-    trans = build_transforms(sgg_cfg, is_train=False)
+    data_loader_test = build_data_loader(sgg_cfg, split="test", is_distributed=False)
     scene_parser = build_scene_parser(sgg_cfg)
     scene_parser.to(device)
     scene_parser.rel_heads.rel_predictor.obj_predictor.register_forward_hook(get_input_hook)
@@ -76,7 +77,7 @@ def collect_sgg_features(dataset, buffer_size=1):
     scene_parser.eval()
     # create dataloader to loop over the dataset
     start_ = 0
-    for i, data in enumerate(scene_parser.data_loader_test, 0):
+    for i, data in enumerate(data_loader_test, 0):
         # for _ in range(int(np.ceil(len(dataset)/buffer_size))):
         #     bs = len(dataset)-start_ if start_+buffer_size > len(dataset) else buffer_size
         bs = 1
