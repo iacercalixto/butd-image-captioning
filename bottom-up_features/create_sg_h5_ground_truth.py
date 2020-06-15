@@ -253,7 +253,8 @@ if __name__ == '__main__':
     val_ids_file = 'val_scene-graph_ids_groundtruth.pkl'
     train_imgs_path = 'data/train2014/'
     val_imgs_path = 'data/val2014/'
-    if outdir:
+    if args.outdir:
+        os.makedirs(args.outdir, exist_ok=True)
         train_data_file = os.path.join(args.outdir, train_data_file)
         val_data_file = os.path.join(args.outdir, val_data_file)
         train_indices_file = os.path.join(args.outdir, train_indices_file)
