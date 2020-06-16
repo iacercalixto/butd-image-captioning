@@ -35,17 +35,25 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
     :param max_len: don't sample captions longer than this length
     """
 
-    assert dataset in {'coco', 'vg-coco', 'vg-coco-high', 'vg-coco-medium', 'vg-coco-low'}
+    assert dataset in {'coco', 'vg-coco', 'vg-coco-high', 'vg-coco-medium', 'vg-coco-low',
+                       'gt-vg-coco', 'gt-vg-coco-high', 'gt-vg-coco-medium', 'gt-vg-coco-low'}
 
     # Read Karpathy JSON
     with open(karpathy_json_path, 'r') as j:
         data = json.load(j)
 
-    with open(os.path.join(output_folder,'train36_imgid2idx.pkl'), 'rb') as j:
-        train_data = pickle.load(j)
+    if 'gt' not in dataset:
+        with open(os.path.join(output_folder, 'train36_imgid2idx.pkl'), 'rb') as j:
+            train_data = pickle.load(j)
 
-    with open(os.path.join(output_folder,'val36_imgid2idx.pkl'), 'rb') as j:
-        val_data = pickle.load(j)
+        with open(os.path.join(output_folder, 'val36_imgid2idx.pkl'), 'rb') as j:
+            val_data = pickle.load(j)
+    else:
+        with open(os.path.join(output_folder, 'train_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
+            train_data = pickle.load(j)
+
+        with open(os.path.join(output_folder, 'val_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
+            val_data = pickle.load(j)
     
     # Read image paths and captions for each image
     train_image_captions = []
