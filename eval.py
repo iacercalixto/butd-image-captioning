@@ -13,7 +13,7 @@ from pycocoevalcap.eval import COCOEvalCap
 from torch.nn.utils.rnn import pad_sequence
 
 
-def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, graph_feature_dim=512):
+def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, graph_feature_dim=512, dataset='TEST'):
     """
     Evaluation
     :param data_name: name of the data files
@@ -49,7 +49,7 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
 
     # DataLoader
     loader = torch.utils.data.DataLoader(
-        CaptionDataset(data_folder, data_name, 'TEST'),
+        CaptionDataset(data_folder, data_name, dataset),
         batch_size=1, shuffle=False, num_workers=1, collate_fn=collate_fn,
         pin_memory=torch.cuda.is_available())
 
@@ -196,8 +196,10 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, gr
 
     # Calculate scores
     # metrics_dict = nlgeval.compute_metrics(references, hypotheses)
-    hypotheses_file = os.path.join(outdir, 'hypotheses', 'TEST.Hypotheses.json')
-    references_file = os.path.join(outdir, 'references', 'TEST.References.json')
+    hypotheses_file = os.path.join(outdir, 'hypotheses', '{}.{}.Hypotheses.json'.format(dataset,
+                                                                                        data_name.split('_')[0]))
+    references_file = os.path.join(outdir, 'references', '{}.{}.References.json'.format(dataset,
+                                                                                        data_name.split('_')[0]))
     create_captions_file(range(len(hypotheses)), hypotheses, hypotheses_file)
     create_captions_file(range(len(references)), references, references_file)
     coco = COCO(references_file)
@@ -220,6 +222,7 @@ if __name__ == '__main__':
                         help='folder with data files saved by create_input_files.py')
     parser.add_argument('--data_name', default='coco_5_cap_per_img_5_min_word_freq', type=str,
                         help='base name shared by data files')
+    parser.add_argument('--dataset', default='TEST', type=str, help='which split to use')
     parser.add_argument('--outdir', default='outputs', type=str,
                         help='path to location where the outputs are saved, so the checkpoint')
     parser.add_argument('--checkpoint_file', type=str, required=True, help="Checkpoint to use for beam search.")
