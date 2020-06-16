@@ -82,21 +82,23 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
             if img['filepath'] == 'train2014':
                 if image_id in train_data:
                     train_image_det.append(("t",train_data[image_id]))
+                    train_image_captions.append(captions)
             else:
                 if image_id in val_data:
                     train_image_det.append(("v",val_data[image_id]))
-            train_image_captions.append(captions)
+                    train_image_captions.append(captions)
         elif img['split'] in {'val'}:
             if image_id in val_data:
                 val_image_det.append(("v",val_data[image_id]))
-            val_image_captions.append(captions)
+                val_image_captions.append(captions)
         elif img['split'] in {'test'}:
             if image_id in val_data:
                 test_image_det.append(("v",val_data[image_id]))
-            test_image_captions.append(captions)
+                test_image_captions.append(captions)
 
     # Sanity check
-    assert len(train_image_det) == len(train_image_captions)
+    assert len(train_image_det) == len(train_image_captions), 'det: {}, cap: {}'.format(len(train_image_det),
+                                                                                        len(train_image_captions))
     assert len(val_image_det) == len(val_image_captions)
     assert len(test_image_det) == len(test_image_captions)
     print('number of examples for train/val/test is: {}/{}/{}'.format(len(train_image_det), len(val_image_det),
