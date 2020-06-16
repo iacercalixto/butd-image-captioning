@@ -42,18 +42,17 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
     with open(karpathy_json_path, 'r') as j:
         data = json.load(j)
 
-    if 'gt' not in dataset:
-        with open(os.path.join(output_folder, 'train36_imgid2idx.pkl'), 'rb') as j:
-            train_data = pickle.load(j)
+    with open(os.path.join(output_folder, 'train36_imgid2idx.pkl'), 'rb') as j:
+        train_data = pickle.load(j)
 
-        with open(os.path.join(output_folder, 'val36_imgid2idx.pkl'), 'rb') as j:
-            val_data = pickle.load(j)
-    else:
-        with open(os.path.join(output_folder, 'train_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
-            train_data = pickle.load(j)
-
-        with open(os.path.join(output_folder, 'val_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
-            val_data = pickle.load(j)
+    with open(os.path.join(output_folder, 'val36_imgid2idx.pkl'), 'rb') as j:
+        val_data = pickle.load(j)
+    # else:
+    #     with open(os.path.join(output_folder, 'train_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
+    #         train_data = pickle.load(j)
+    #
+    #     with open(os.path.join(output_folder, 'val_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
+    #         val_data = pickle.load(j)
     
     # Read image paths and captions for each image
     train_image_captions = []
