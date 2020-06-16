@@ -9,13 +9,12 @@ if __name__ == '__main__':
                         help='path to the chosen dataset')
     args = parser.parse_args()
     # Create input files (along with word map)
-    if 'gt' not in args.dataset:
-        create_input_files(dataset=args.dataset,
-                           karpathy_json_path=args.dataset_path,
-                           captions_per_image=5,
-                           min_word_freq=5,
-                           output_folder='final_dataset',
-                           max_len=50)
+    create_input_files(dataset=args.dataset,
+                       karpathy_json_path=args.dataset_path,
+                       captions_per_image=5,
+                       min_word_freq=5,
+                       output_folder='final_dataset',
+                       max_len=50)
     if args.sg:
         create_scene_graph_input_files(dataset=args.dataset,
                                        karpathy_json_path=args.dataset_path,
