@@ -47,13 +47,13 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
 
     with open(os.path.join(output_folder, 'val36_imgid2idx.pkl'), 'rb') as j:
         val_data = pickle.load(j)
-    # else:
-    #     with open(os.path.join(output_folder, 'train_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
-    #         train_data = pickle.load(j)
-    #
-    #     with open(os.path.join(output_folder, 'val_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
-    #         val_data = pickle.load(j)
-    
+    if 'gt' in dataset:
+        with open(os.path.join(output_folder, 'train_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
+            gt_train_data = pickle.load(j)
+
+        with open(os.path.join(output_folder, 'val_scene-graph_imgid2idx_groundtruth.pkl'), 'rb') as j:
+            gt_val_data = pickle.load(j)
+
     # Read image paths and captions for each image
     train_image_captions = []
     val_image_captions = []
@@ -79,21 +79,41 @@ def create_input_files(dataset,karpathy_json_path,captions_per_image, min_word_f
 
         if img['split'] in {'train', 'restval'}:
             if img['filepath'] == 'train2014':
-                if image_id in train_data:
-                    train_image_det.append(("t",train_data[image_id]))
-                    train_image_captions.append(captions)
+                if 'gt' in dataset:
+                    if image_id in train_data and image_id in gt_train_data:
+                        train_image_det.append(("t",train_data[image_id]))
+                        train_image_captions.append(captions)
+                else:
+                    if image_id in train_data:
+                        train_image_det.append(("t",train_data[image_id]))
+                        train_image_captions.append(captions)
+            else:
+                if 'gt' in dataset:
+                    if image_id in train_data and image_id in gt_train_data:
+                        train_image_det.append(("v", val_data[image_id]))
+                        train_image_captions.append(captions)
+                else:
+                    if image_id in val_data:
+                        train_image_det.append(("v",val_data[image_id]))
+                        train_image_captions.append(captions)
+        elif img['split'] in {'val'}:
+            if 'gt' in dataset:
+                if image_id in val_data and image_id in gt_val_data:
+                    val_image_det.append(("v",val_data[image_id]))
+                    val_image_captions.append(captions)
             else:
                 if image_id in val_data:
-                    train_image_det.append(("v",val_data[image_id]))
-                    train_image_captions.append(captions)
-        elif img['split'] in {'val'}:
-            if image_id in val_data:
-                val_image_det.append(("v",val_data[image_id]))
-                val_image_captions.append(captions)
+                    val_image_det.append(("v",val_data[image_id]))
+                    val_image_captions.append(captions)
         elif img['split'] in {'test'}:
-            if image_id in val_data:
-                test_image_det.append(("v",val_data[image_id]))
-                test_image_captions.append(captions)
+            if 'gt' in dataset:
+                if image_id in val_data and image_id in gt_val_data:
+                    test_image_det.append(("v",val_data[image_id]))
+                    test_image_captions.append(captions)
+            else:
+                if image_id in val_data:
+                    test_image_det.append(("v",val_data[image_id]))
+                    test_image_captions.append(captions)
 
     # Sanity check
     assert len(train_image_det) == len(train_image_captions), 'det: {}, cap: {}'.format(len(train_image_det),
