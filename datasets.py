@@ -25,13 +25,19 @@ class CaptionDataset(Dataset):
 
         # Open hdf5 file where images are stored
         if scene_graph:
-            self.sg_train_h5 = h5py.File(data_folder + '/train_scene-graph.hdf5', 'r')
+            if 'gt' not in dataset_name:
+                self.sg_train_h5 = h5py.File(data_folder + '/train_scene-graph.hdf5', 'r')
+            else:
+                self.sg_train_h5 = h5py.File(data_folder + '/train_scene-graph_groundtruth.hdf5', 'r')
             self.train_obj = self.sg_train_h5['object_features']
             self.train_obj_mask = self.sg_train_h5['object_mask']
             self.train_rel = self.sg_train_h5['relation_features']
             self.train_rel_mask = self.sg_train_h5['relation_mask']
             self.train_pair_idx = self.sg_train_h5['relation_pair_idx']
-            self.sg_val_h5 = h5py.File(data_folder + '/val_scene-graph.hdf5', 'r')
+            if 'gt' not in dataset_name:
+                self.sg_val_h5 = h5py.File(data_folder + '/val_scene-graph.hdf5', 'r')
+            else:
+                self.sg_val_h5 = h5py.File(data_folder + '/val_scene-graph_groundtruth.hdf5', 'r')
             self.val_obj = self.sg_val_h5['object_features']
             self.val_obj_mask = self.sg_val_h5['object_mask']
             self.val_rel = self.sg_val_h5['relation_features']
