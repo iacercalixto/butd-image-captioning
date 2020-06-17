@@ -10,6 +10,7 @@ from tqdm import tqdm
 import argparse
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
+import dgl
 
 
 def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, dataset='TEST'):
@@ -142,6 +143,8 @@ def beam_evaluate(data_name, checkpoint_file, data_folder, beam_size, outdir, da
             h2 = h2[prev_word_inds[incomplete_inds]]
             c2 = c2[prev_word_inds[incomplete_inds]]
             image_features_mean = image_features_mean[prev_word_inds[incomplete_inds]]
+            gs = dgl.unbatch(g)
+            g = dgl.batch([gs[incomp_i] for incomp_i in incomplete_inds])
             top_k_scores = top_k_scores[incomplete_inds].unsqueeze(1)
             k_prev_words = next_word_inds[incomplete_inds].unsqueeze(1)
 
