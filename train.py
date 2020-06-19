@@ -52,11 +52,11 @@ def main():
         checkpoint = torch.load(args.checkpoint)
         start_epoch = checkpoint['epoch'] + 1
         epochs_since_improvement = checkpoint['epochs_since_improvement']
-        args.stopping_metric = checkpoint['stopping_metric'],
-        best_stopping_score = checkpoint['metric_score'],
+        args.stopping_metric = checkpoint['stopping_metric']
+        best_stopping_score = checkpoint['metric_score']
         decoder = checkpoint['decoder']
-        decoder_optimizer = checkpoint['decoder_optimizer'],
-        tracking = checkpoint['tracking'],
+        decoder_optimizer = checkpoint['decoder_optimizer']
+        tracking = checkpoint['tracking']
         best_epoch = checkpoint['best_epoch']
 
     # Move to GPU, if available
