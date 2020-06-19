@@ -66,6 +66,8 @@ def main():
     # Move to GPU, if available
     decoder = decoder.to(device)
 
+    print(decoder)
+
     # Loss functions
     criterion_ce = nn.CrossEntropyLoss().to(device)
     criterion_dis = nn.MultiLabelMarginLoss().to(device)

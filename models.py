@@ -58,12 +58,19 @@ class RGCNLayer(nn.Module):
         self.activation = activation
         self.is_input_layer = is_input_layer
         self.edge_gating = edge_gating
-        self.num_edge_types = 5  # subj [0], obj[1], subj'[2], obj'[3], self[4]
+        self.num_edge_types = 5  # subj[0], obj[1], subj'[2], obj'[3], self[4]
 
         # weight bases in equation (3)
+        #self.weight = []
+        #for i in range(self.num_edge_types):
+        #    self.weight.append( nn.Linear(self.in_feat, self.out_feat) )
+        #self.weight = torch.stack( self.weight )
         self.weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, self.out_feat))
         if edge_gating:
-            self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat,1))
+            #self.gate_weight = nn.Linear(self.num_edge_types, self.in_feat)
+            #self.gate_weight = self.gate_weight.unsqueeze(-1)
+            #self.gate_bias = nn.Linear(self.num_edge_types, 1)
+            self.gate_weight = nn.Parameter(torch.Tensor(self.num_edge_types, self.in_feat, 1))
             self.gate_bias = nn.Parameter(torch.Tensor(self.num_edge_types, 1))
         # if self.num_bases < self.num_rels:
         #     # linear combination coefficients in equation (3)
@@ -118,6 +125,16 @@ class RGCNLayer(nn.Module):
 
         g.update_all(message_func, fn.sum(msg='msg', out='h'), apply_func)
 
+    def extra_repr(self):
+        extra = []
+        n_parameters = len(list(self.parameters()))
+        for c,p in enumerate(self.parameters()):
+            extra.append(str(p.size()))
+            # append comma to all but last entry
+            if c < n_parameters-1:
+                extra[-1] = extra[-1] + ",\n"
+        return "".join(extra)
+
 
 class RGCNModule(nn.Module):
     """ Class originally from: https://docs.dgl.ai/tutorials/models/1_gnn/4_rgcn.html """
@@ -130,9 +147,9 @@ class RGCNModule(nn.Module):
         self.num_layers = num_layers
         self.edge_gating = edge_gating
         # create rgcn layers
-        self.build_model()
+        #self.build_model()
 
-    def build_model(self):
+        #def build_model(self):
         self.layers = nn.ModuleList()
         for l in range(self.num_layers):
             activation = F.relu
