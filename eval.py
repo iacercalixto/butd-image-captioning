@@ -203,5 +203,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     cudnn.benchmark = True  # True only if inputs to model are fixed size, otherwise lot of computational overhead
 
-    metrics_dict = beam_evaluate(args.data_name, args.checkpoint_file, args.data_folder, args.beam_size, args.outdir)
+    metrics_dict = beam_evaluate(args.data_name, args.checkpoint_file, args.data_folder, args.beam_size, args.outdir,
+                                 dataset=args.dataset)
     print(metrics_dict)
