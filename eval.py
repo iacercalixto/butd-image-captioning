@@ -216,5 +216,5 @@ if __name__ == '__main__':
     cudnn.benchmark = True  # True only if inputs to model are fixed size, otherwise lot of computational overhead
 
     metrics_dict = beam_evaluate(args.data_name, args.checkpoint_file, args.data_folder, args.beam_size, args.outdir,
-                                 graph_feature_dim=args.graph_feature_dim)
+                                 graph_feature_dim=args.graph_feature_dim, dataset=args.dataset)
     print(metrics_dict)
