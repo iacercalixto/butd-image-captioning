@@ -411,7 +411,7 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     args.outdir = os.path.join(args.outdir,
-                               'cascade_sg_first_gat',
+                               'cascade_img_first_gat',
                                'batch_size-{bs}_epochs-{ep}_dropout-{drop}_patience-{pat}_stop-metric-{met}'.format(
                                    bs=args.batch_size, ep=args.epochs, drop=args.dropout,
                                    pat=args.patience, met=args.stopping_metric),
