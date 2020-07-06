@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" serverName="arwen">
+    <serverData>
+      <paths name="arwen">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/butd-image-captioning" local="$PROJECT_DIR$" />
+            <mapping deploy="/sgg" local="$PROJECT_DIR$/../sgg" />
+            <mapping deploy="/coco_caption" local="$PROJECT_DIR$/../coco-caption" />
+            <mapping deploy="/FactorizableNet" local="$PROJECT_DIR$/../FactorizableNet" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="bilbo">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/butd-image-captioning" local="$PROJECT_DIR$" />
+            <mapping deploy="/sgg" local="$PROJECT_DIR$/../sgg" />
+            <mapping deploy="coco_caption" local="$PROJECT_DIR$/../coco-caption" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="frodo">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/butd-image-captioning" local="$PROJECT_DIR$" />
+            <mapping deploy="/sgg" local="$PROJECT_DIR$/../sgg" />
+            <mapping deploy="/coco_caption" local="$PROJECT_DIR$/../coco-caption" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="rose">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/butd-image-captioning" local="$PROJECT_DIR$" />
+            <mapping deploy="/sgg" local="$PROJECT_DIR$/../sgg" />
+            <mapping deploy="/coco_caption" local="$PROJECT_DIR$/../coco-caption" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+  </component>
+</project>

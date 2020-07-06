@@ -1,0 +1,738 @@
+[
+  {
+    "image_id": 0,
+    "caption": "a fire hydrant sitting on the side of a road"
+  },
+  {
+    "image_id": 1,
+    "caption": "a herd of elephants walking through a river"
+  },
+  {
+    "image_id": 2,
+    "caption": "a group of colorful kites flying in the sky"
+  },
+  {
+    "image_id": 3,
+    "caption": "a baseball player swinging a bat at a ball"
+  },
+  {
+    "image_id": 4,
+    "caption": "a clock on the side of a building"
+  },
+  {
+    "image_id": 5,
+    "caption": "a group of motorcycles parked next to each other"
+  },
+  {
+    "image_id": 6,
+    "caption": "a blue and white airplane flying in the sky"
+  },
+  {
+    "image_id": 7,
+    "caption": "a group of people standing in front of a bus"
+  },
+  {
+    "image_id": 8,
+    "caption": "a group of people standing around a wooden floor"
+  },
+  {
+    "image_id": 9,
+    "caption": "a man on a motorcycle in the air"
+  },
+  {
+    "image_id": 10,
+    "caption": "a man wearing glasses and a black jacket"
+  },
+  {
+    "image_id": 11,
+    "caption": "a man sitting on a bench with an umbrella"
+  },
+  {
+    "image_id": 12,
+    "caption": "a bunch of umbrellas hanging from a ceiling"
+  },
+  {
+    "image_id": 13,
+    "caption": "a person jumping in the air to catch a frisbee"
+  },
+  {
+    "image_id": 14,
+    "caption": "a close up of a plate of food with broccoli"
+  },
+  {
+    "image_id": 15,
+    "caption": "a clock mounted to the side of a building"
+  },
+  {
+    "image_id": 16,
+    "caption": "a bathroom with a sink and a mirror"
+  },
+  {
+    "image_id": 17,
+    "caption": "a group of fighter jets flying in the sky"
+  },
+  {
+    "image_id": 18,
+    "caption": "a cat laying on top of a wooden bench"
+  },
+  {
+    "image_id": 19,
+    "caption": "a herd of sheep standing on top of a lush green hillside"
+  },
+  {
+    "image_id": 20,
+    "caption": "a green truck driving down a city street"
+  },
+  {
+    "image_id": 21,
+    "caption": "a person holding a hot dog in their hand"
+  },
+  {
+    "image_id": 22,
+    "caption": "a baseball player holding a bat on a field"
+  },
+  {
+    "image_id": 23,
+    "caption": "a truck is parked on the side of the road"
+  },
+  {
+    "image_id": 24,
+    "caption": "a group of people standing outside of a store"
+  },
+  {
+    "image_id": 25,
+    "caption": "an apple sitting on top of a wooden table"
+  },
+  {
+    "image_id": 26,
+    "caption": "a white plate topped with meat and broccoli"
+  },
+  {
+    "image_id": 27,
+    "caption": "a man flying through the air while riding a snowboard"
+  },
+  {
+    "image_id": 28,
+    "caption": "a living room filled with furniture and a rug"
+  },
+  {
+    "image_id": 29,
+    "caption": "a close up of a bunch of bananas on a table"
+  },
+  {
+    "image_id": 30,
+    "caption": "a woman riding a skateboard down a sidewalk"
+  },
+  {
+    "image_id": 31,
+    "caption": "a plate with a sandwich and french fries"
+  },
+  {
+    "image_id": 32,
+    "caption": "a bus driving down a street next to tall buildings"
+  },
+  {
+    "image_id": 33,
+    "caption": "a man standing next to a green and green train"
+  },
+  {
+    "image_id": 34,
+    "caption": "a herd of elephants standing in the water"
+  },
+  {
+    "image_id": 35,
+    "caption": "a group of people walking through a store"
+  },
+  {
+    "image_id": 36,
+    "caption": "a group of people sitting around a table"
+  },
+  {
+    "image_id": 37,
+    "caption": "a woman taking a picture of a slice of pizza"
+  },
+  {
+    "image_id": 38,
+    "caption": "a baseball player holding a bat on a field"
+  },
+  {
+    "image_id": 39,
+    "caption": "a woman standing in front of a mirror in a room"
+  },
+  {
+    "image_id": 40,
+    "caption": "a small airplane sitting on top of an airport runway"
+  },
+  {
+    "image_id": 41,
+    "caption": "a bus parked in front of a building"
+  },
+  {
+    "image_id": 42,
+    "caption": "a couple of goats standing on top of a hill"
+  },
+  {
+    "image_id": 43,
+    "caption": "a city street with a lot of snow"
+  },
+  {
+    "image_id": 44,
+    "caption": "a man and a woman holding an umbrella"
+  },
+  {
+    "image_id": 45,
+    "caption": "a large brown bear laying on the ground"
+  },
+  {
+    "image_id": 46,
+    "caption": "a man riding a skateboard down a street"
+  },
+  {
+    "image_id": 47,
+    "caption": "a man riding a skateboard down a ramp"
+  },
+  {
+    "image_id": 48,
+    "caption": "a large body of water with a clock tower in the background"
+  },
+  {
+    "image_id": 49,
+    "caption": "a herd of sheep standing on top of a lush green field"
+  },
+  {
+    "image_id": 50,
+    "caption": "a green street sign sitting on top of a metal pole"
+  },
+  {
+    "image_id": 51,
+    "caption": "a cat laying on top of a paper bag"
+  },
+  {
+    "image_id": 52,
+    "caption": "a man that is sitting in the water with an umbrella"
+  },
+  {
+    "image_id": 53,
+    "caption": "a man holding a tennis racquet on a tennis court"
+  },
+  {
+    "image_id": 54,
+    "caption": "a man sitting on a bench next to a man"
+  },
+  {
+    "image_id": 55,
+    "caption": "a woman with a hat on her head"
+  },
+  {
+    "image_id": 56,
+    "caption": "a red train pulling into a train station"
+  },
+  {
+    "image_id": 57,
+    "caption": "a close up of a plate of food with broccoli"
+  },
+  {
+    "image_id": 58,
+    "caption": "a room with a bed a chair and a window"
+  },
+  {
+    "image_id": 59,
+    "caption": "a couple of people standing on a tennis court"
+  },
+  {
+    "image_id": 60,
+    "caption": "a baby laying in bed with a teddy bear"
+  },
+  {
+    "image_id": 61,
+    "caption": "a table with plates of food on it"
+  },
+  {
+    "image_id": 62,
+    "caption": "a woman is riding a bike with a dog"
+  },
+  {
+    "image_id": 63,
+    "caption": "a man standing on top of a snow covered slope"
+  },
+  {
+    "image_id": 64,
+    "caption": "a red and white train traveling down train tracks"
+  },
+  {
+    "image_id": 65,
+    "caption": "a large elephant walking across a dirt field"
+  },
+  {
+    "image_id": 66,
+    "caption": "a large white boat in a body of water"
+  },
+  {
+    "image_id": 67,
+    "caption": "a black and white dog sitting in the grass"
+  },
+  {
+    "image_id": 68,
+    "caption": "a desktop computer sitting on top of a desk"
+  },
+  {
+    "image_id": 69,
+    "caption": "a woman is sitting on a wooden bench"
+  },
+  {
+    "image_id": 70,
+    "caption": "a bench sitting on top of a snow covered slope"
+  },
+  {
+    "image_id": 71,
+    "caption": "a giraffe standing on top of a dirt field"
+  },
+  {
+    "image_id": 72,
+    "caption": "a herd of sheep grazing in a field"
+  },
+  {
+    "image_id": 73,
+    "caption": "a man in a blue shirt throwing a frisbee"
+  },
+  {
+    "image_id": 74,
+    "caption": "a plate of food on a wooden table"
+  },
+  {
+    "image_id": 75,
+    "caption": "a laptop computer sitting on top of a wooden desk"
+  },
+  {
+    "image_id": 76,
+    "caption": "a motorcycle parked in front of a store"
+  },
+  {
+    "image_id": 77,
+    "caption": "a white van parked in front of a tall building"
+  },
+  {
+    "image_id": 78,
+    "caption": "a man sitting on the beach with a surfboard"
+  },
+  {
+    "image_id": 79,
+    "caption": "a black and white photo of a man sitting on a ledge"
+  },
+  {
+    "image_id": 80,
+    "caption": "a polar bear is swimming in the water"
+  },
+  {
+    "image_id": 81,
+    "caption": "a white plate topped with meat and vegetables"
+  },
+  {
+    "image_id": 82,
+    "caption": "a group of people standing in a living room"
+  },
+  {
+    "image_id": 83,
+    "caption": "a couple of sheep standing on a lush green hillside"
+  },
+  {
+    "image_id": 84,
+    "caption": "a box that is on a wooden table"
+  },
+  {
+    "image_id": 85,
+    "caption": "a pool with a pool of water and some trees"
+  },
+  {
+    "image_id": 86,
+    "caption": "a couple of people playing a game of frisbee"
+  },
+  {
+    "image_id": 87,
+    "caption": "a group of people riding skis down a snow covered slope"
+  },
+  {
+    "image_id": 88,
+    "caption": "a man holding a tennis racquet on a tennis court"
+  },
+  {
+    "image_id": 89,
+    "caption": "a man holding a tennis racquet on a tennis court"
+  },
+  {
+    "image_id": 90,
+    "caption": "a living room filled with furniture and a fire place"
+  },
+  {
+    "image_id": 91,
+    "caption": "a close up of a sandwich on a plate"
+  },
+  {
+    "image_id": 92,
+    "caption": "a couple of cows in a field with mountains in the background"
+  },
+  {
+    "image_id": 93,
+    "caption": "two zebras grazing on grass in a field"
+  },
+  {
+    "image_id": 94,
+    "caption": "a little girl sitting at a table eating pizza"
+  },
+  {
+    "image_id": 95,
+    "caption": "a vase of flowers sitting on a table"
+  },
+  {
+    "image_id": 96,
+    "caption": "a black bear standing next to a tree"
+  },
+  {
+    "image_id": 97,
+    "caption": "a man is eating a piece of pizza"
+  },
+  {
+    "image_id": 98,
+    "caption": "a person laying in bed with a blanket"
+  },
+  {
+    "image_id": 99,
+    "caption": "a man in a white shirt is playing with a giraffe"
+  },
+  {
+    "image_id": 100,
+    "caption": "a close up of a street sign on a pole"
+  },
+  {
+    "image_id": 101,
+    "caption": "a black and white photo of a train on a track"
+  },
+  {
+    "image_id": 102,
+    "caption": "a man holding a nintendo wii game controller"
+  },
+  {
+    "image_id": 103,
+    "caption": "a woman holding a tennis racquet on a tennis court"
+  },
+  {
+    "image_id": 104,
+    "caption": "a traffic light with a building in the background"
+  },
+  {
+    "image_id": 105,
+    "caption": "a red bus parked in a parking lot"
+  },
+  {
+    "image_id": 106,
+    "caption": "a couple of sheep standing next to each other in a field"
+  },
+  {
+    "image_id": 107,
+    "caption": "a bed in a room with a large window"
+  },
+  {
+    "image_id": 108,
+    "caption": "a dog is looking at a cup of coffee"
+  },
+  {
+    "image_id": 109,
+    "caption": "a close up of a plate of food on a plate"
+  },
+  {
+    "image_id": 110,
+    "caption": "a group of men playing a game of baseball"
+  },
+  {
+    "image_id": 111,
+    "caption": "a group of people riding on a train"
+  },
+  {
+    "image_id": 112,
+    "caption": "a man riding a wave on top of a surfboard"
+  },
+  {
+    "image_id": 113,
+    "caption": "a group of people sitting around a table"
+  },
+  {
+    "image_id": 114,
+    "caption": "a red bicycle parked next to a fire hydrant"
+  },
+  {
+    "image_id": 115,
+    "caption": "a green double decker bus parked in a parking lot"
+  },
+  {
+    "image_id": 116,
+    "caption": "a white plate with a fork and a fork"
+  },
+  {
+    "image_id": 117,
+    "caption": "a store shelf filled with lots of bananas"
+  },
+  {
+    "image_id": 118,
+    "caption": "a large building with a clock on the side of it"
+  },
+  {
+    "image_id": 119,
+    "caption": "a red double decker bus driving down a street"
+  },
+  {
+    "image_id": 120,
+    "caption": "a dog looking at the camera in a room"
+  },
+  {
+    "image_id": 121,
+    "caption": "a couple of men standing on top of a sandy beach"
+  },
+  {
+    "image_id": 122,
+    "caption": "a woman riding a wave on top of a surfboard"
+  },
+  {
+    "image_id": 123,
+    "caption": "a man and a girl playing with a frisbee"
+  },
+  {
+    "image_id": 124,
+    "caption": "a group of people standing next to a cow"
+  },
+  {
+    "image_id": 125,
+    "caption": "a city bus driving down a city street"
+  },
+  {
+    "image_id": 126,
+    "caption": "a large bird flying over a beach near the ocean"
+  },
+  {
+    "image_id": 127,
+    "caption": "a train traveling down train tracks next to a platform"
+  },
+  {
+    "image_id": 128,
+    "caption": "a group of people walking down a street with umbrellas"
+  },
+  {
+    "image_id": 129,
+    "caption": "a white sink sitting next to a bathroom mirror"
+  },
+  {
+    "image_id": 130,
+    "caption": "a white and black bird standing on a beach"
+  },
+  {
+    "image_id": 131,
+    "caption": "a red bird sitting on top of a wooden chair"
+  },
+  {
+    "image_id": 132,
+    "caption": "a boat in the middle of a body of water"
+  },
+  {
+    "image_id": 133,
+    "caption": "a man riding a skateboard down a ramp"
+  },
+  {
+    "image_id": 134,
+    "caption": "a man sitting at a table with a plate of cake"
+  },
+  {
+    "image_id": 135,
+    "caption": "a kitchen with wooden cabinets and a refrigerator"
+  },
+  {
+    "image_id": 136,
+    "caption": "a woman talking on a cell phone while walking down a street"
+  },
+  {
+    "image_id": 137,
+    "caption": "a tall clock tower with a clock on it"
+  },
+  {
+    "image_id": 138,
+    "caption": "a red stop sign sitting next to a stop sign"
+  },
+  {
+    "image_id": 139,
+    "caption": "a close up of a cat wearing glasses"
+  },
+  {
+    "image_id": 140,
+    "caption": "a couple of brown bears sitting next to each other"
+  },
+  {
+    "image_id": 141,
+    "caption": "a man sitting on the side of a street next to a car"
+  },
+  {
+    "image_id": 142,
+    "caption": "a baseball player swinging a bat at a ball"
+  },
+  {
+    "image_id": 143,
+    "caption": "a hotel room with a bed and a window"
+  },
+  {
+    "image_id": 144,
+    "caption": "a black and white photo of a woman laying on a bed"
+  },
+  {
+    "image_id": 145,
+    "caption": "a red and white sign in front of a building"
+  },
+  {
+    "image_id": 146,
+    "caption": "a man riding skis down a snow covered slope"
+  },
+  {
+    "image_id": 147,
+    "caption": "a woman riding a wave on top of a surfboard"
+  },
+  {
+    "image_id": 148,
+    "caption": "a man and a child are standing in the water"
+  },
+  {
+    "image_id": 149,
+    "caption": "a kitchen with a refrigerator sink and refrigerator"
+  },
+  {
+    "image_id": 150,
+    "caption": "a group of people standing under a colorful umbrella"
+  },
+  {
+    "image_id": 151,
+    "caption": "a bunch of yellow umbrellas hanging from a tree"
+  },
+  {
+    "image_id": 152,
+    "caption": "a man riding a wave on top of a surfboard"
+  },
+  {
+    "image_id": 153,
+    "caption": "a group of men standing next to each other on a field"
+  },
+  {
+    "image_id": 154,
+    "caption": "a man walking down a sidewalk holding an umbrella"
+  },
+  {
+    "image_id": 155,
+    "caption": "a horse drawn carriage on a dirt road"
+  },
+  {
+    "image_id": 156,
+    "caption": "a row of motorcycles parked next to each other"
+  },
+  {
+    "image_id": 157,
+    "caption": "a white and blue bus driving down a street"
+  },
+  {
+    "image_id": 158,
+    "caption": "a group of people standing on top of a snow covered slope"
+  },
+  {
+    "image_id": 159,
+    "caption": "a woman sitting on a chair holding a nintendo wii game controller"
+  },
+  {
+    "image_id": 160,
+    "caption": "a couple of boats sitting on top of a river"
+  },
+  {
+    "image_id": 161,
+    "caption": "a close up of a plate of food with broccoli"
+  },
+  {
+    "image_id": 162,
+    "caption": "a baseball player swinging a bat at a ball"
+  },
+  {
+    "image_id": 163,
+    "caption": "a pile of luggage sitting next to each other"
+  },
+  {
+    "image_id": 164,
+    "caption": "a double decker bus driving down a street"
+  },
+  {
+    "image_id": 165,
+    "caption": "a cat sitting next to a glass of wine"
+  },
+  {
+    "image_id": 166,
+    "caption": "a baseball player holding a bat on a field"
+  },
+  {
+    "image_id": 167,
+    "caption": "a couple of trucks parked next to each other"
+  },
+  {
+    "image_id": 168,
+    "caption": "a city street filled with lots of umbrellas"
+  },
+  {
+    "image_id": 169,
+    "caption": "a group of people walking in front of a building"
+  },
+  {
+    "image_id": 170,
+    "caption": "a person flying a kite in a parking lot"
+  },
+  {
+    "image_id": 171,
+    "caption": "a street sign in front of a tree"
+  },
+  {
+    "image_id": 172,
+    "caption": "a baby elephant standing next to a wire fence"
+  },
+  {
+    "image_id": 173,
+    "caption": "a pile of luggage sitting on top of a floor"
+  },
+  {
+    "image_id": 174,
+    "caption": "a group of people on skis in the snow"
+  },
+  {
+    "image_id": 175,
+    "caption": "a motorcycle parked on the side of a road"
+  },
+  {
+    "image_id": 176,
+    "caption": "a person riding skis down a snow covered slope"
+  },
+  {
+    "image_id": 177,
+    "caption": "a woman laying on a bed in a bedroom"
+  },
+  {
+    "image_id": 178,
+    "caption": "a group of people standing on top of a sandy beach"
+  },
+  {
+    "image_id": 179,
+    "caption": "a bathroom with a toilet sink and shower"
+  },
+  {
+    "image_id": 180,
+    "caption": "a white teddy bear sitting on top of a couch"
+  },
+  {
+    "image_id": 181,
+    "caption": "a man riding a wave on top of a surfboard"
+  },
+  {
+    "image_id": 182,
+    "caption": "a group of baseball players standing on top of a field"
+  },
+  {
+    "image_id": 183,
+    "caption": "a person jumping in the air with a frisbee"
+  }
+]
